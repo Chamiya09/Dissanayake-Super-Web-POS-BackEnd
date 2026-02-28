@@ -51,7 +51,8 @@ public class ProductService {
                 request.sku(),
                 request.category(),
                 request.buyingPrice(),
-                request.sellingPrice()
+                request.sellingPrice(),
+                request.unit()
         );
 
         return repository.save(product);
@@ -76,6 +77,7 @@ public class ProductService {
         existing.setCategory(request.category());
         existing.setBuyingPrice(request.buyingPrice());
         existing.setSellingPrice(request.sellingPrice());
+        existing.setUnit(request.unit());
 
         return repository.save(existing);
     }

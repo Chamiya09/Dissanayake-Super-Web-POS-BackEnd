@@ -42,6 +42,10 @@ public class Product {
     @Column(name = "selling_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal sellingPrice;
 
+    @Size(max = 50)
+    @Column(name = "unit", length = 50)
+    private String unit;            // e.g. kg, grams, liters, pieces, bottles
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -54,12 +58,14 @@ public class Product {
                    String sku,
                    String category,
                    BigDecimal buyingPrice,
-                   BigDecimal sellingPrice) {
+                   BigDecimal sellingPrice,
+                   String unit) {
         this.productName  = productName;
         this.sku          = sku;
         this.category     = category;
         this.buyingPrice  = buyingPrice;
         this.sellingPrice = sellingPrice;
+        this.unit         = unit;
     }
 
     // ── Getters & Setters ─────────────────────────────────────────────────────
@@ -80,6 +86,9 @@ public class Product {
 
     public BigDecimal getSellingPrice() { return sellingPrice; }
     public void setSellingPrice(BigDecimal sellingPrice) { this.sellingPrice = sellingPrice; }
+
+    public String getUnit() { return unit; }
+    public void setUnit(String unit) { this.unit = unit; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
 }
