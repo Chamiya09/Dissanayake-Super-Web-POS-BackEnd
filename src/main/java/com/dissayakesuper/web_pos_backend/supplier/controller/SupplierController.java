@@ -12,7 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/suppliers")
-@CrossOrigin(origins = "*")   // allow React dev server (Vite default: http://localhost:5173)
+@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
 public class SupplierController {
 
     private final SupplierService service;
