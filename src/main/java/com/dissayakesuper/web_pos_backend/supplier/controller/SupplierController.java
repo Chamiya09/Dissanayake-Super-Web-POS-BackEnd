@@ -1,5 +1,8 @@
-package com.dissayakesuper.web_pos_backend.supplier;
+package com.dissayakesuper.web_pos_backend.supplier.controller;
 
+import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
+import com.dissayakesuper.web_pos_backend.supplier.dto.SupplierRequest;
+import com.dissayakesuper.web_pos_backend.supplier.service.SupplierService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

@@ -1,4 +1,4 @@
-package com.dissayakesuper.web_pos_backend.supplier;
+package com.dissayakesuper.web_pos_backend.supplier.dto;
 
 import jakarta.validation.constraints.*;
 

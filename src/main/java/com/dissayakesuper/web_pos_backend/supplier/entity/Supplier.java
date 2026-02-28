@@ -1,4 +1,4 @@
-package com.dissayakesuper.web_pos_backend.supplier;
+package com.dissayakesuper.web_pos_backend.supplier.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
