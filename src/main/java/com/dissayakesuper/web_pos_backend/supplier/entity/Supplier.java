@@ -1,5 +1,6 @@
 package com.dissayakesuper.web_pos_backend.supplier.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -39,6 +40,7 @@ public class Supplier {
     @Column(name = "lead_time", nullable = false)
     private Integer leadTime;
 
+    @JsonProperty("isAutoReorderEnabled")
     @Column(name = "is_auto_reorder_enabled", nullable = false)
     private boolean isAutoReorderEnabled = false;
 
