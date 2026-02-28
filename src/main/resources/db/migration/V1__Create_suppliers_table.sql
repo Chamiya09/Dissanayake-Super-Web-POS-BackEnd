@@ -1,5 +1,5 @@
 CREATE TABLE suppliers (
-    id                      SERIAL          PRIMARY KEY,
+    id                      BIGSERIAL       PRIMARY KEY,
     company_name            VARCHAR(255)    NOT NULL,
     contact_person          VARCHAR(255)    NOT NULL,
     email                   VARCHAR(255)    NOT NULL UNIQUE,
