@@ -39,7 +39,7 @@ public class Sale {
     )
     private List<SaleItem> items = new ArrayList<>();
 
-    // ── Constructors ─────────────────────────────────────────────────────────
+    // ── Constructors ──────────────────────────────────────────────────────────
 
     public Sale() {}
 
@@ -50,7 +50,7 @@ public class Sale {
         this.status        = status;
     }
 
-    // ── Convenience helper ────────────────────────────────────────────────────
+    // ── Convenience helpers ───────────────────────────────────────────────────
 
     public void addItem(SaleItem item) {
         item.setSale(this);

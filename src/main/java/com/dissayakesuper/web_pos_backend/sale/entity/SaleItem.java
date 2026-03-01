@@ -26,7 +26,7 @@ public class SaleItem {
     @JoinColumn(name = "sale_id", nullable = false)
     private Sale sale;
 
-    // ── Constructors ─────────────────────────────────────────────────────────
+    // ── Constructors ──────────────────────────────────────────────────────────
 
     public SaleItem() {}
 
