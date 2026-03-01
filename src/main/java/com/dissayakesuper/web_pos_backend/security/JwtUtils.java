@@ -49,10 +49,10 @@ public class JwtUtils {
         Date expiry = new Date(now.getTime() + jwtExpirationMs);
 
         return Jwts.builder()
-                .subject(username)
+                .setSubject(username)
                 .claim("role", role)
-                .issuedAt(now)
-                .expiration(expiry)
+                .setIssuedAt(now)
+                .setExpiration(expiry)
                 .signWith(signingKey())
                 .compact();
     }
@@ -86,10 +86,10 @@ public class JwtUtils {
     // ── Internal ──────────────────────────────────────────────────────────────
 
     private Claims parseClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(signingKey())
+        return Jwts.parserBuilder()
+                .setSigningKey(signingKey())
                 .build()
-                .parseSignedClaims(token)
-                .getPayload();
+                .parseClaimsJws(token)
+                .getBody();
     }
 }

@@ -51,8 +51,8 @@ public class SecurityConfig {
     /** Wires our UserDetailsService + BCrypt encoder into Spring's auth pipeline. */
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-        provider.setUserDetailsService(userDetailsService);
+        // Spring Security 6.3+ requires UserDetailsService via constructor (no-arg ctor removed)
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         return provider;
     }
@@ -86,8 +86,8 @@ public class SecurityConfig {
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
 
             .authorizeHttpRequests(auth -> auth
-                    // Public: login
-                    .requestMatchers("/api/auth/**").permitAll()
+                    // Public: login + Spring Boot error rendering
+                    .requestMatchers("/api/auth/**", "/error").permitAll()
                     // Public: CORS pre-flight
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     // Everything else requires authentication
