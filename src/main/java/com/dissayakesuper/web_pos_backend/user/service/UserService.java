@@ -11,12 +11,13 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class UserService {
 
-    private final UserRepository repo;
+    private final UserRepository        repo;
     private final BCryptPasswordEncoder encoder;
 
-    public UserService(UserRepository repo) {
+    /** Encoder bean is provided by {@link com.dissayakesuper.web_pos_backend.config.SecurityConfig}. */
+    public UserService(UserRepository repo, BCryptPasswordEncoder encoder) {
         this.repo    = repo;
-        this.encoder = new BCryptPasswordEncoder();
+        this.encoder = encoder;
     }
 
     // ── Change password ───────────────────────────────────────────────────────
