@@ -1,5 +1,6 @@
 package com.dissayakesuper.web_pos_backend.sale.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 
 @Entity
@@ -22,6 +23,7 @@ public class SaleItem {
     @Column(name = "line_total", nullable = false)
     private Double lineTotal;
 
+    @JsonBackReference
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sale_id", nullable = false)
     private Sale sale;

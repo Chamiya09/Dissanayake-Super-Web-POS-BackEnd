@@ -1,5 +1,6 @@
 package com.dissayakesuper.web_pos_backend.sale.entity;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -31,11 +32,12 @@ public class Sale {
     @Column(name = "status", nullable = false, length = 20)
     private String status;   // "Completed" | "Voided"
 
+    @JsonManagedReference
     @OneToMany(
             mappedBy      = "sale",
             cascade       = CascadeType.ALL,
             orphanRemoval = true,
-            fetch         = FetchType.LAZY
+            fetch         = FetchType.EAGER
     )
     private List<SaleItem> items = new ArrayList<>();
 
