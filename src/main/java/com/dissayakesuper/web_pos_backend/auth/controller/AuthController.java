@@ -63,9 +63,9 @@ public class AuthController {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.INTERNAL_SERVER_ERROR, "User record missing after authentication."));
 
-        // 3. Issue JWT; return token + display name + role to the frontend
+        // 3. Issue JWT; return token + login username + display name + role to the frontend
         String token = jwtUtils.generateToken(user.getUsername(), user.getRole());
 
-        return new AuthResponse(token, user.getFullName(), user.getRole());
+        return new AuthResponse(token, user.getUsername(), user.getFullName(), user.getRole());
     }
 }
