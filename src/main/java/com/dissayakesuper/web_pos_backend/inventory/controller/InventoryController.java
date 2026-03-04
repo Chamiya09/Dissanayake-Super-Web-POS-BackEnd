@@ -2,6 +2,7 @@ package com.dissayakesuper.web_pos_backend.inventory.controller;
 
 import com.dissayakesuper.web_pos_backend.inventory.dto.AddStockRequest;
 import com.dissayakesuper.web_pos_backend.inventory.dto.EditInventoryRequest;
+import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryAnalyticsDTO;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryStatusResponse;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
@@ -31,6 +32,16 @@ public class InventoryController {
     @GetMapping("/status")
     public ResponseEntity<List<InventoryStatusResponse>> getAllStatus() {
         return ResponseEntity.ok(service.getInventoryStatus());
+    }
+
+    // ── GET /api/inventory/analytics ─────────────────────────────────────────
+    /**
+     * Returns aggregated inventory metrics:
+     * total tracked items, low-stock count, out-of-stock count, total inventory value.
+     */
+    @GetMapping("/analytics")
+    public ResponseEntity<InventoryAnalyticsDTO> getAnalytics() {
+        return ResponseEntity.ok(service.getAnalytics());
     }
 
     // ── GET /api/inventory/low-stock ──────────────────────────────────────────

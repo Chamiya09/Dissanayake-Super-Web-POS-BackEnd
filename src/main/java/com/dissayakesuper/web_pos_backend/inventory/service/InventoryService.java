@@ -1,5 +1,6 @@
 package com.dissayakesuper.web_pos_backend.inventory.service;
 
+import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryAnalyticsDTO;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryStatusResponse;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
@@ -40,6 +41,32 @@ public class InventoryService {
     @Transactional(readOnly = true)
     public List<Inventory> getAllInventory() {
         return inventoryRepository.findAll();
+    }
+
+    // ── ANALYTICS ─────────────────────────────────────────────────────────────
+
+    /**
+     * Computes aggregated inventory metrics in a single pass over all records.
+     * Uses Stream API — no extra JPQL query needed.
+     */
+    @Transactional(readOnly = true)
+    public InventoryAnalyticsDTO getAnalytics() {
+        List<Inventory> all = inventoryRepository.findAll();
+
+        long tracked    = all.size();
+        long lowStock   = all.stream().filter(i -> i.getStockQuantity() > 0
+                                                   && i.getStockQuantity() <= i.getReorderLevel()).count();
+        long outOfStock = all.stream().filter(i -> i.getStockQuantity() <= 0).count();
+        double totalValue = all.stream()
+                .mapToDouble(i -> {
+                    double qty   = i.getStockQuantity();
+                    double price = i.getProduct().getSellingPrice() != null
+                            ? i.getProduct().getSellingPrice().doubleValue() : 0.0;
+                    return qty * price;
+                })
+                .sum();
+
+        return new InventoryAnalyticsDTO(tracked, lowStock, outOfStock, totalValue);
     }
 
     /**
