@@ -3,6 +3,7 @@ package com.dissayakesuper.web_pos_backend.inventory.controller;
 import com.dissayakesuper.web_pos_backend.inventory.dto.AddStockRequest;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryStatusResponse;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
+import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
 import com.dissayakesuper.web_pos_backend.inventory.service.InventoryService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -28,11 +29,7 @@ public class InventoryController {
      */
     @GetMapping("/status")
     public ResponseEntity<List<InventoryStatusResponse>> getAllStatus() {
-        List<InventoryStatusResponse> result = service.getAllInventory()
-                .stream()
-                .map(InventoryStatusResponse::from)
-                .toList();
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(service.getInventoryStatus());
     }
 
     // ── GET /api/inventory/low-stock ──────────────────────────────────────────
@@ -46,6 +43,15 @@ public class InventoryController {
                 .map(InventoryStatusResponse::from)
                 .toList();
         return ResponseEntity.ok(result);
+    }
+
+    // ── GET /api/inventory/logs/{productId} ───────────────────────────────────
+    /**
+     * Returns the full stock-change history for a product, newest first.
+     */
+    @GetMapping("/logs/{productId}")
+    public ResponseEntity<List<InventoryLog>> getLogs(@PathVariable Long productId) {
+        return ResponseEntity.ok(service.getLogsByProductId(productId));
     }
 
     // ── PUT /api/inventory/add-stock/{productId} ──────────────────────────────

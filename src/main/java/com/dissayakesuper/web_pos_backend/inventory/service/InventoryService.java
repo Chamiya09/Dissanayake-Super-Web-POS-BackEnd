@@ -1,6 +1,9 @@
 package com.dissayakesuper.web_pos_backend.inventory.service;
 
+import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryStatusResponse;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
+import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
+import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepository;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
@@ -16,13 +19,16 @@ import java.util.List;
 @Transactional
 public class InventoryService {
 
-    private final InventoryRepository inventoryRepository;
-    private final ProductRepository   productRepository;
+    private final InventoryRepository    inventoryRepository;
+    private final InventoryLogRepository inventoryLogRepository;
+    private final ProductRepository      productRepository;
 
     public InventoryService(InventoryRepository inventoryRepository,
+                            InventoryLogRepository inventoryLogRepository,
                             ProductRepository productRepository) {
-        this.inventoryRepository = inventoryRepository;
-        this.productRepository   = productRepository;
+        this.inventoryRepository    = inventoryRepository;
+        this.inventoryLogRepository = inventoryLogRepository;
+        this.productRepository      = productRepository;
     }
 
     // ── GET ALL ───────────────────────────────────────────────────────────────
@@ -34,6 +40,18 @@ public class InventoryService {
     @Transactional(readOnly = true)
     public List<Inventory> getAllInventory() {
         return inventoryRepository.findAll();
+    }
+
+    /**
+     * Convenience method: returns all inventory records as flattened status DTOs
+     * (Product Name, Category, Price + Stock, Unit, stockStatus).
+     */
+    @Transactional(readOnly = true)
+    public List<InventoryStatusResponse> getInventoryStatus() {
+        return inventoryRepository.findAll()
+                .stream()
+                .map(InventoryStatusResponse::from)
+                .toList();
     }
 
     // ── LOW STOCK ─────────────────────────────────────────────────────────────
@@ -82,10 +100,31 @@ public class InventoryService {
         Inventory inventory = inventoryRepository.findByProductId(productId)
                 .orElseGet(() -> createInventoryForProduct(productId));
 
-        inventory.setStockQuantity(inventory.getStockQuantity() + quantityToAdd);
+        double newQty = inventory.getStockQuantity() + quantityToAdd;
+        inventory.setStockQuantity(newQty);
         inventory.setLastUpdated(LocalDateTime.now());
 
-        return inventoryRepository.save(inventory);
+        Inventory saved = inventoryRepository.save(inventory);
+
+        // ── Audit log ──────────────────────────────────────────────────────
+        inventoryLogRepository.save(InventoryLog.builder()
+                .productId(saved.getProduct().getId())
+                .productName(saved.getProduct().getProductName())
+                .quantityChanged(quantityToAdd)
+                .stockAfter(newQty)
+                .build());
+
+        return saved;
+    }
+
+    // ── AUDIT LOG ─────────────────────────────────────────────────────────────
+
+    /**
+     * Returns the full stock-change history for a product, newest first.
+     */
+    @Transactional(readOnly = true)
+    public List<InventoryLog> getLogsByProductId(Long productId) {
+        return inventoryLogRepository.findByProductIdOrderByTimestampDesc(productId);
     }
 
     // ── HELPERS ───────────────────────────────────────────────────────────────
