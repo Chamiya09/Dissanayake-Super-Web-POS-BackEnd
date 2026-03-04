@@ -17,6 +17,7 @@ public record InventoryStatusResponse(
         String productName,
         String sku,
         String category,
+        Double sellingPrice,
 
         // ── Inventory fields ────────────────────────────────────────────────
         Double stockQuantity,
@@ -41,6 +42,8 @@ public record InventoryStatusResponse(
                 inv.getProduct().getProductName(),
                 inv.getProduct().getSku(),
                 inv.getProduct().getCategory(),
+                inv.getProduct().getSellingPrice() != null
+                        ? inv.getProduct().getSellingPrice().doubleValue() : 0.0,
                 qty,
                 reorder,
                 inv.getUnit(),

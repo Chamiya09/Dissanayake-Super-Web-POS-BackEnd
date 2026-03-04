@@ -1,6 +1,7 @@
 package com.dissayakesuper.web_pos_backend.inventory.controller;
 
 import com.dissayakesuper.web_pos_backend.inventory.dto.AddStockRequest;
+import com.dissayakesuper.web_pos_backend.inventory.dto.EditInventoryRequest;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryStatusResponse;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
@@ -66,5 +67,28 @@ public class InventoryController {
             @Valid @RequestBody AddStockRequest request) {
         Inventory updated = service.updateStock(productId, request.quantity());
         return ResponseEntity.ok(InventoryStatusResponse.from(updated));
+    }
+
+    // ── PUT /api/inventory/edit/{id} ──────────────────────────────────────────
+    /**
+     * Updates the reorderLevel and/or unit of an existing inventory record.
+     * Does NOT change stockQuantity — use add-stock for that.
+     */
+    @PutMapping("/edit/{id}")
+    public ResponseEntity<InventoryStatusResponse> editInventory(
+            @PathVariable Long id,
+            @Valid @RequestBody EditInventoryRequest request) {
+        Inventory updated = service.editInventory(id, request);
+        return ResponseEntity.ok(InventoryStatusResponse.from(updated));
+    }
+
+    // ── DELETE /api/inventory/{id} ────────────────────────────────────────────
+    /**
+     * Removes the inventory tracking record — does NOT delete the Product.
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteInventory(@PathVariable Long id) {
+        service.deleteInventory(id);
+        return ResponseEntity.noContent().build();
     }
 }

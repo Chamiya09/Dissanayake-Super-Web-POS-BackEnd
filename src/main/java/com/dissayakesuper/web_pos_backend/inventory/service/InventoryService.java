@@ -117,6 +117,40 @@ public class InventoryService {
         return saved;
     }
 
+    // ── DELETE INVENTORY RECORD ───────────────────────────────────────────────
+
+    /**
+     * Removes the inventory tracking record for the given inventory id.
+     * The underlying Product is NOT deleted.
+     */
+    public void deleteInventory(Long inventoryId) {
+        if (!inventoryRepository.existsById(inventoryId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Inventory record not found with id: " + inventoryId);
+        }
+        inventoryRepository.deleteById(inventoryId);
+    }
+
+    // ── EDIT INVENTORY RECORD ─────────────────────────────────────────────────
+
+    /**
+     * Updates the {@code reorderLevel} and/or {@code unit} of an inventory record.
+     * Null fields are ignored (partial update semantics).
+     */
+    public Inventory editInventory(Long inventoryId,
+                                   com.dissayakesuper.web_pos_backend.inventory.dto.EditInventoryRequest request) {
+        Inventory inv = inventoryRepository.findById(inventoryId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Inventory record not found with id: " + inventoryId));
+
+        if (request.reorderLevel() != null) inv.setReorderLevel(request.reorderLevel());
+        if (request.unit()         != null) inv.setUnit(request.unit());
+
+        return inventoryRepository.save(inv);
+    }
+
     // ── AUDIT LOG ─────────────────────────────────────────────────────────────
 
     /**
