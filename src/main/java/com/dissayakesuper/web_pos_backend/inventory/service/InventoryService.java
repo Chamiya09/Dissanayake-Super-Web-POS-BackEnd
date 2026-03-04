@@ -36,6 +36,16 @@ public class InventoryService {
         return inventoryRepository.findAll();
     }
 
+    // ── LOW STOCK ─────────────────────────────────────────────────────────────
+
+    /**
+     * Returns only inventory records where stockQuantity &lt; reorderLevel.
+     */
+    @Transactional(readOnly = true)
+    public List<Inventory> getLowStockInventory() {
+        return inventoryRepository.findAllLowStock();
+    }
+
     // ── GET BY PRODUCT ────────────────────────────────────────────────────────
 
     /**
