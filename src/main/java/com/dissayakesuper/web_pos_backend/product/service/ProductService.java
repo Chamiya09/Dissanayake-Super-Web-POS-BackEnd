@@ -52,7 +52,9 @@ public class ProductService {
                 request.category(),
                 request.buyingPrice(),
                 request.sellingPrice(),
-                request.unit()
+                request.unit(),
+                request.stockQuantity(),
+                request.reorderLevel()
         );
 
         return repository.save(product);
@@ -78,6 +80,10 @@ public class ProductService {
         existing.setBuyingPrice(request.buyingPrice());
         existing.setSellingPrice(request.sellingPrice());
         existing.setUnit(request.unit());
+        if (request.stockQuantity() != null) {
+            existing.setStockQuantity(request.stockQuantity());
+        }
+        existing.setReorderLevel(request.reorderLevel());
 
         return repository.save(existing);
     }

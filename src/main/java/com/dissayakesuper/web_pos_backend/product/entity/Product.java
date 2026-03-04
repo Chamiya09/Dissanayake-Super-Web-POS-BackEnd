@@ -46,6 +46,12 @@ public class Product {
     @Column(name = "unit", length = 50)
     private String unit;            // e.g. kg, grams, liters, pieces, bottles
 
+    @Column(name = "stock_quantity", nullable = false, columnDefinition = "FLOAT DEFAULT 0.0")
+    private Double stockQuantity = 0.0;
+
+    @Column(name = "reorder_level")
+    private Double reorderLevel;    // Alert threshold — null means no alert
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -60,12 +66,25 @@ public class Product {
                    BigDecimal buyingPrice,
                    BigDecimal sellingPrice,
                    String unit) {
-        this.productName  = productName;
-        this.sku          = sku;
-        this.category     = category;
-        this.buyingPrice  = buyingPrice;
-        this.sellingPrice = sellingPrice;
-        this.unit         = unit;
+        this(productName, sku, category, buyingPrice, sellingPrice, unit, 0.0, null);
+    }
+
+    public Product(String productName,
+                   String sku,
+                   String category,
+                   BigDecimal buyingPrice,
+                   BigDecimal sellingPrice,
+                   String unit,
+                   Double stockQuantity,
+                   Double reorderLevel) {
+        this.productName   = productName;
+        this.sku           = sku;
+        this.category      = category;
+        this.buyingPrice   = buyingPrice;
+        this.sellingPrice  = sellingPrice;
+        this.unit          = unit;
+        this.stockQuantity = stockQuantity != null ? stockQuantity : 0.0;
+        this.reorderLevel  = reorderLevel;
     }
 
     // ── Getters & Setters ─────────────────────────────────────────────────────
@@ -89,6 +108,12 @@ public class Product {
 
     public String getUnit() { return unit; }
     public void setUnit(String unit) { this.unit = unit; }
+
+    public Double getStockQuantity() { return stockQuantity; }
+    public void setStockQuantity(Double stockQuantity) { this.stockQuantity = stockQuantity != null ? stockQuantity : 0.0; }
+
+    public Double getReorderLevel() { return reorderLevel; }
+    public void setReorderLevel(Double reorderLevel) { this.reorderLevel = reorderLevel; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

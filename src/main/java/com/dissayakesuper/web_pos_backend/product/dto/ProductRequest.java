@@ -33,5 +33,11 @@ public record ProductRequest(
         BigDecimal sellingPrice,
 
         @Size(max = 50, message = "Unit must be 50 characters or fewer.")
-        String unit          // optional — e.g. kg, grams, liters, pieces, bottles
+        String unit,         // optional — e.g. kg, grams, liters, pieces, bottles
+
+        @DecimalMin(value = "0.0", inclusive = true, message = "Stock quantity must be 0 or greater.")
+        Double stockQuantity, // optional — defaults to 0.0 on the entity
+
+        @DecimalMin(value = "0.0", inclusive = true, message = "Reorder level must be 0 or greater.")
+        Double reorderLevel   // optional — alert threshold, null = no alert
 ) {}
