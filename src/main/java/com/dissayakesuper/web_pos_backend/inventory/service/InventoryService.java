@@ -188,6 +188,14 @@ public class InventoryService {
         return inventoryLogRepository.findByProductIdOrderByTimestampDesc(productId);
     }
 
+    /**
+     * Returns all stock-change log entries across all products, newest first.
+     */
+    @Transactional(readOnly = true)
+    public List<InventoryLog> getAllLogs() {
+        return inventoryLogRepository.findAllByOrderByTimestampDesc();
+    }
+
     // ── HELPERS ───────────────────────────────────────────────────────────────
 
     /**

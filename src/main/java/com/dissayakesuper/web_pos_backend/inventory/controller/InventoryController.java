@@ -57,6 +57,15 @@ public class InventoryController {
         return ResponseEntity.ok(result);
     }
 
+    // ── GET /api/inventory/logs ────────────────────────────────────────────────
+    /**
+     * Returns all stock-change log entries across every product, newest first.
+     */
+    @GetMapping("/logs")
+    public ResponseEntity<List<InventoryLog>> getAllLogs() {
+        return ResponseEntity.ok(service.getAllLogs());
+    }
+
     // ── GET /api/inventory/logs/{productId} ───────────────────────────────────
     /**
      * Returns the full stock-change history for a product, newest first.

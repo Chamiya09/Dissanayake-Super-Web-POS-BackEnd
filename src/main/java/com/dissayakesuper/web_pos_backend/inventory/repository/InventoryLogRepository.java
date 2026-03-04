@@ -11,4 +11,7 @@ public interface InventoryLogRepository extends JpaRepository<InventoryLog, Long
 
     /** All log entries for a specific product, newest first. */
     List<InventoryLog> findByProductIdOrderByTimestampDesc(Long productId);
+
+    /** All log entries across all products, newest first. */
+    List<InventoryLog> findAllByOrderByTimestampDesc();
 }
