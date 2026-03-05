@@ -65,10 +65,11 @@ public class SaleService {
             inventory.setStockQuantity(newQty);
             inventoryRepository.save(inventory);
 
-            // ── Audit log (negative quantityChanged = stock removed) ──────────
+            // ── Audit log: record the stock deduction caused by this sale ─────
             inventoryLogRepository.save(InventoryLog.builder()
                     .productId(inventory.getProduct().getId())
                     .productName(inventory.getProduct().getProductName())
+                    .action("SALE_REDUCTION")
                     .quantityChanged(-soldQty)
                     .stockAfter(newQty)
                     .build());

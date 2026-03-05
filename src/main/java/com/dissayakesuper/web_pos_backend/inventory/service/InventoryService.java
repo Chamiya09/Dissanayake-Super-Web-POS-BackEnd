@@ -133,10 +133,11 @@ public class InventoryService {
 
         Inventory saved = inventoryRepository.save(inventory);
 
-        // ── Audit log ──────────────────────────────────────────────────────
+        // ── Audit log: record the manual stock addition ──────────────────────
         inventoryLogRepository.save(InventoryLog.builder()
                 .productId(saved.getProduct().getId())
                 .productName(saved.getProduct().getProductName())
+                .action("MANUAL_ADDITION")
                 .quantityChanged(quantityToAdd)
                 .stockAfter(newQty)
                 .build());
