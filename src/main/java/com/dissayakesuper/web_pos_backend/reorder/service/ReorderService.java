@@ -17,9 +17,12 @@ import java.util.List;
 public class ReorderService {
 
     private final ReorderRepository reorderRepository;
+    private final EmailService emailService;
 
-    public ReorderService(ReorderRepository reorderRepository) {
+    public ReorderService(ReorderRepository reorderRepository,
+                          EmailService emailService) {
         this.reorderRepository = reorderRepository;
+        this.emailService = emailService;
     }
 
     // ── CREATE ORDER ──────────────────────────────────────────────────────────
@@ -60,6 +63,17 @@ public class ReorderService {
         reorder.setTotalAmount(total);
 
         Reorder saved = reorderRepository.save(reorder);
+
+        // Fire-and-forget — runs on the Spring async executor so it does not
+        // block the HTTP response or roll back the transaction on mail failure.
+        emailService.sendPurchaseOrderEmail(
+                saved.getSupplierEmail(),
+                saved.getOrderRef(),
+                dto.items(),
+                saved.getTotalAmount(),
+                "Purchasing Manager"   // TODO: pass authenticated user's name here
+        );
+
         return ReorderResponseDTO.from(saved);
     }
 
