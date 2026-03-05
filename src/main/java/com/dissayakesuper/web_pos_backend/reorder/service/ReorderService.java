@@ -87,6 +87,20 @@ public class ReorderService {
                 .toList();
     }
 
+    // ── ORDER HISTORY (sorted newest-first) ───────────────────────────────────
+
+    /**
+     * Returns all orders sorted by {@code createdAt} descending so the
+     * front-end history table always shows the most recent orders at the top.
+     */
+    @Transactional(readOnly = true)
+    public List<ReorderResponseDTO> getOrderHistory() {
+        return reorderRepository.findAllByOrderByCreatedAtDesc()
+                .stream()
+                .map(ReorderResponseDTO::from)
+                .toList();
+    }
+
     // ── READ ONE ──────────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)

@@ -18,4 +18,7 @@ public interface ReorderRepository extends JpaRepository<Reorder, Long> {
     List<Reorder> findAllByStatus(Status status);
 
     List<Reorder> findAllBySupplierEmail(String supplierEmail);
+
+    /** Returns all orders sorted newest-first — used by the history endpoint. */
+    List<Reorder> findAllByOrderByCreatedAtDesc();
 }
