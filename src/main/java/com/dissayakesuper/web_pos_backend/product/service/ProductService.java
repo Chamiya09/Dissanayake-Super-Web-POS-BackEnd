@@ -114,6 +114,16 @@ public class ProductService {
         return repository.findBySupplierId(supplierId);
     }
 
+    // ── SEARCH BY SKU ─────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public Product getProductBySku(String sku) {
+        return repository.findBySku(sku)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No product found with SKU: '" + sku + "'"));
+    }
+
     // ── UNASSIGN ────────────────────────────────────────────────────────────
 
     public Product unassignProduct(Long id) {

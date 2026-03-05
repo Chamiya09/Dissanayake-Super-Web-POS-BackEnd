@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
@@ -83,6 +84,13 @@ public class ProductController {
     @GetMapping("/by-supplier/{supplierId}")
     public ResponseEntity<List<Product>> getBySupplierId(@PathVariable Long supplierId) {
         return ResponseEntity.ok(service.getProductsBySupplierId(supplierId));
+    }
+
+    // ── GET /api/products/search?sku={sku} ───────────────────────────────────
+    /** Returns the product matching the exact SKU. 404 if not found. */
+    @GetMapping("/search")
+    public ResponseEntity<Product> searchBySku(@RequestParam String sku) {
+        return ResponseEntity.ok(service.getProductBySku(sku));
     }
 
     // ── PATCH /api/products/{id}/unassign ──────────────────────────────────────
