@@ -28,8 +28,10 @@ public class UserService {
 
     // ── Helper ────────────────────────────────────────────────────────────────
     private UserResponse toResponse(User u) {
-        return new UserResponse(u.getId(), u.getUsername(), u.getFullName(),
-                                u.getEmail(), u.getRole(), u.isActive());
+        UserResponse r = new UserResponse(u.getId(), u.getUsername(), u.getFullName(),
+                                          u.getEmail(), u.getRole(), u.isActive());
+        r.setCreatedAt(u.getCreatedAt());
+        return r;
     }
 
     // ── List all users ────────────────────────────────────────────────────────
