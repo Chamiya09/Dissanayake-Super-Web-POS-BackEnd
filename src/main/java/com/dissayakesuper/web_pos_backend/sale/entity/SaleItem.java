@@ -1,7 +1,16 @@
 package com.dissayakesuper.web_pos_backend.sale.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
-import jakarta.persistence.*;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "sale_items")
@@ -13,6 +22,10 @@ public class SaleItem {
 
     @Column(name = "product_name", nullable = false, length = 255)
     private String productName;
+
+    /** FK to the products table — used by SaleService to deduct inventory stock. */
+    @Column(name = "product_id")
+    private Long productId;
 
     @Column(name = "quantity", nullable = false)
     private Integer quantity;
@@ -46,6 +59,9 @@ public class SaleItem {
 
     public String getProductName() { return productName; }
     public void setProductName(String productName) { this.productName = productName; }
+
+    public Long getProductId() { return productId; }
+    public void setProductId(Long productId) { this.productId = productId; }
 
     public Integer getQuantity() { return quantity; }
     public void setQuantity(Integer quantity) { this.quantity = quantity; }

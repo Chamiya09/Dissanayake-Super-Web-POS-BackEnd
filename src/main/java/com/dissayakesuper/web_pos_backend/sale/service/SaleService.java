@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
+import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
+import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepository;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.entity.SaleItem;
@@ -17,12 +19,16 @@ import com.dissayakesuper.web_pos_backend.sale.repository.SaleRepository;
 @Transactional
 public class SaleService {
 
-    private final SaleRepository       saleRepository;
-    private final InventoryRepository  inventoryRepository;
+    private final SaleRepository        saleRepository;
+    private final InventoryRepository   inventoryRepository;
+    private final InventoryLogRepository inventoryLogRepository;
 
-    public SaleService(SaleRepository saleRepository, InventoryRepository inventoryRepository) {
-        this.saleRepository      = saleRepository;
-        this.inventoryRepository = inventoryRepository;
+    public SaleService(SaleRepository saleRepository,
+                       InventoryRepository inventoryRepository,
+                       InventoryLogRepository inventoryLogRepository) {
+        this.saleRepository       = saleRepository;
+        this.inventoryRepository  = inventoryRepository;
+        this.inventoryLogRepository = inventoryLogRepository;
     }
 
     // ── CREATE ────────────────────────────────────────────────────────────────
@@ -38,8 +44,10 @@ public class SaleService {
         for (SaleItem item : sale.getItems()) {
             item.setSale(sale);
 
-            Inventory inventory = inventoryRepository
-                    .findByProductProductName(item.getProductName())
+            // Look up inventory by product_id (preferred) or fall back to product name
+            Inventory inventory = (item.getProductId() != null
+                    ? inventoryRepository.findByProductId(item.getProductId())
+                    : inventoryRepository.findByProductProductName(item.getProductName()))
                     .orElseThrow(() -> new ResponseStatusException(
                             HttpStatus.BAD_REQUEST,
                             "No inventory record found for product: '" + item.getProductName() + "'"));
@@ -53,8 +61,17 @@ public class SaleService {
                         ", requested: " + soldQty);
             }
 
-            inventory.setStockQuantity(inventory.getStockQuantity() - soldQty);
+            double newQty = inventory.getStockQuantity() - soldQty;
+            inventory.setStockQuantity(newQty);
             inventoryRepository.save(inventory);
+
+            // ── Audit log (negative quantityChanged = stock removed) ──────────
+            inventoryLogRepository.save(InventoryLog.builder()
+                    .productId(inventory.getProduct().getId())
+                    .productName(inventory.getProduct().getProductName())
+                    .quantityChanged(-soldQty)
+                    .stockAfter(newQty)
+                    .build());
         }
 
         return saleRepository.save(sale);
