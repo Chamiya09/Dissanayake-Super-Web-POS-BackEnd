@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -99,6 +100,59 @@ public class ReorderService {
                 today
         );
 
+        return ReorderResponseDTO.from(saved);
+    }
+
+    // ── UPDATE ORDER ──────────────────────────────────────────────────────────
+
+    /**
+     * Partially updates an existing purchase order.
+     * <ul>
+     *   <li>If {@code dto.supplierEmail()} is non-null/non-blank, updates the email.</li>
+     *   <li>If {@code dto.items()} is non-null and non-empty, replaces all line items
+     *       and recalculates {@code totalAmount}.</li>
+     * </ul>
+     * Terminal-state orders (CANCELLED / RECEIVED) cannot be edited.
+     *
+     * @throws ResponseStatusException 404 if order not found
+     * @throws ResponseStatusException 409 if order is in a terminal state
+     */
+    public ReorderResponseDTO updateOrder(Long id, ReorderUpdateDTO dto) {
+        Reorder reorder = findOrThrow(id);
+
+        if (reorder.getStatus() == Status.CANCELLED || reorder.getStatus() == Status.RECEIVED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Order '" + reorder.getOrderRef() + "' is " + reorder.getStatus()
+                            + " and cannot be edited.");
+        }
+
+        // ── Update supplierEmail ──────────────────────────────────────────────
+        if (dto.supplierEmail() != null && !dto.supplierEmail().isBlank()) {
+            reorder.setSupplierEmail(dto.supplierEmail());
+        }
+
+        // ── Replace items and recalculate total ───────────────────────────────
+        if (dto.items() != null && !dto.items().isEmpty()) {
+            // orphanRemoval = true on the collection will DELETE the old rows on flush
+            List<ReorderItem> oldItems = new ArrayList<>(reorder.getItems());
+            oldItems.forEach(reorder::removeItem);
+
+            double total = 0.0;
+            for (ReorderItemRequestDTO itemDTO : dto.items()) {
+                ReorderItem item = ReorderItem.builder()
+                        .productName(itemDTO.productName())
+                        .productId(itemDTO.productId())
+                        .quantity(itemDTO.quantity())
+                        .unitPrice(itemDTO.unitPrice())
+                        .build();
+                reorder.addItem(item);
+                total += itemDTO.quantity().doubleValue() * itemDTO.unitPrice();
+            }
+            reorder.setTotalAmount(total);
+        }
+
+        Reorder saved = reorderRepository.save(reorder);
         return ReorderResponseDTO.from(saved);
     }
 

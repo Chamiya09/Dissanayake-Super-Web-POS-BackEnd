@@ -3,6 +3,7 @@ package com.dissayakesuper.web_pos_backend.reorder.controller;
 import com.dissayakesuper.web_pos_backend.reorder.dto.LowStockItemDTO;
 import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderRequestDTO;
 import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderResponseDTO;
+import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderUpdateDTO;
 import com.dissayakesuper.web_pos_backend.reorder.service.ReorderService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -52,6 +53,19 @@ public class ReorderController {
                 : "Store Manager";
         ReorderResponseDTO created = reorderService.createOrder(dto, managerName);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    // ── PUT /api/v1/reorder/{id} ──────────────────────────────────────────────
+
+    /**
+     * Updates the supplierEmail and/or items of an existing purchase order.
+     * Returns 409 if the order is in a terminal state (CANCELLED / RECEIVED).
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<ReorderResponseDTO> updateOrder(
+            @PathVariable Long id,
+            @Valid @RequestBody ReorderUpdateDTO dto) {
+        return ResponseEntity.ok(reorderService.updateOrder(id, dto));
     }
 
     // ── GET /api/v1/reorder/low-stock ─────────────────────────────────────────

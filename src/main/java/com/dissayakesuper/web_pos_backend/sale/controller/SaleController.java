@@ -1,6 +1,7 @@
 package com.dissayakesuper.web_pos_backend.sale.controller;
 
 import com.dissayakesuper.web_pos_backend.sale.dto.StatusRequest;
+import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.service.SaleService;
 import jakarta.validation.Valid;
@@ -42,7 +43,20 @@ public class SaleController {
         Sale created = saleService.createSale(sale);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
-
+    // ── PUT /api/sales/{id} ────────────────────────────────────────────────────
+    /**
+     * Updates an existing sale.
+     * Reverses old inventory deductions, updates sale fields,
+     * then applies the new line items ― all in a single transaction.
+     * Returns 409 if the sale is Voided; 400 if stock is insufficient.
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<Sale> update(
+            @PathVariable Long id,
+            @Valid @RequestBody SaleUpdateRequest request) {
+        Sale updated = saleService.updateSale(id, request);
+        return ResponseEntity.ok(updated);
+    }
     // ── PUT /api/sales/{id}/status ────────────────────────────────────────────
     /** Updates the status of a sale (e.g., "Completed" → "Voided"). */
     @PutMapping("/{id}/status")

@@ -11,9 +11,13 @@ import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepository;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
+import com.dissayakesuper.web_pos_backend.sale.dto.SaleItemRequest;
+import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.entity.SaleItem;
 import com.dissayakesuper.web_pos_backend.sale.repository.SaleRepository;
+
+import java.util.ArrayList;
 
 @Service
 @Transactional
@@ -93,6 +97,100 @@ public class SaleService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Sale not found with id: " + id));
+    }
+
+    // ── UPDATE SALE (reverse + re-adjust) ──────────────────────────────────────
+
+    /**
+     * Atomically updates a sale using a "Reverse and Re-adjust" strategy:
+     * <ol>
+     *   <li><b>Step 1 — Reverse Inventory</b>: add each old item's quantity back to stock.</li>
+     *   <li><b>Step 2 — Update Sale</b>: apply the new paymentMethod and totalAmount.</li>
+     *   <li><b>Step 3 — Apply New Inventory</b>: replace items and deduct new quantities.
+     *       Throws 400 if any product has insufficient stock (rolls back everything).</li>
+     * </ol>
+     * Voided sales cannot be edited (throws 409).
+     */
+    public Sale updateSale(Long saleId, SaleUpdateRequest request) {
+
+        // ── Load ──────────────────────────────────────────────────────────────
+        Sale sale = getSaleById(saleId);
+
+        if ("Voided".equalsIgnoreCase(sale.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Sale " + sale.getReceiptNo() + " is voided and cannot be edited.");
+        }
+
+        // ── Step 1: Reverse old inventory deductions ──────────────────────────
+        // Snapshot the list before clearing so we iterate the original items safely.
+        List<SaleItem> oldItems = new ArrayList<>(sale.getItems());
+        for (SaleItem oldItem : oldItems) {
+            if (oldItem.getProductId() == null) continue;
+
+            inventoryRepository.findByProductId(oldItem.getProductId()).ifPresent(inv -> {
+                double returnedQty  = oldItem.getQuantity().doubleValue();
+                double restoredStock = inv.getStockQuantity() + returnedQty;
+                inv.setStockQuantity(restoredStock);
+                inventoryRepository.save(inv);
+
+                inventoryLogRepository.save(InventoryLog.builder()
+                        .productId(inv.getProduct().getId())
+                        .productName(inv.getProduct().getProductName())
+                        .action("SALE_UPDATE_REVERSAL")
+                        .quantityChanged(returnedQty)
+                        .stockAfter(restoredStock)
+                        .build());
+            });
+        }
+
+        // ── Step 2: Update top-level sale fields ──────────────────────────────
+        sale.setTotalAmount(request.totalAmount());
+        sale.setPaymentMethod(request.paymentMethod());
+
+        // ── Step 3: Replace items and deduct new quantities ───────────────────
+        // Clearing with orphanRemoval=true schedules DELETE for all old SaleItem rows.
+        sale.getItems().clear();
+
+        for (SaleItemRequest itemReq : request.items()) {
+            Inventory inv = (itemReq.productId() != null
+                    ? inventoryRepository.findByProductId(itemReq.productId())
+                    : inventoryRepository.findByProductProductName(itemReq.productName()))
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "No inventory record found for product: '" + itemReq.productName() + "'"));
+
+            double neededQty = itemReq.quantity().doubleValue();
+            if (inv.getStockQuantity() < neededQty) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Insufficient stock for '" + itemReq.productName() +
+                        "'. Available: " + inv.getStockQuantity() +
+                        ", requested: " + neededQty);
+            }
+
+            double newStock = inv.getStockQuantity() - neededQty;
+            inv.setStockQuantity(newStock);
+            inventoryRepository.save(inv);
+
+            SaleItem newItem = new SaleItem(
+                    itemReq.productName(),
+                    itemReq.quantity(),
+                    itemReq.unitPrice(),
+                    itemReq.lineTotal());
+            newItem.setProductId(itemReq.productId());
+            sale.addItem(newItem);
+
+            inventoryLogRepository.save(InventoryLog.builder()
+                    .productId(inv.getProduct().getId())
+                    .productName(inv.getProduct().getProductName())
+                    .action("SALE_UPDATE_REDUCTION")
+                    .quantityChanged(-neededQty)
+                    .stockAfter(newStock)
+                    .build());
+        }
+
+        return saleRepository.save(sale);
     }
 
     // ── VOID / UPDATE STATUS ──────────────────────────────────────────────────
