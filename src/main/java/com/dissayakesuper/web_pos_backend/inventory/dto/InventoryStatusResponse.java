@@ -32,9 +32,9 @@ public record InventoryStatusResponse(
         double reorder = inv.getReorderLevel();
 
         String status;
-        if (qty <= 0)           status = "OUT_OF_STOCK";
-        else if (qty < reorder) status = "LOW_STOCK";
-        else                    status = "IN_STOCK";
+        if (qty <= 0)            status = "OUT_OF_STOCK";
+        else if (qty <= reorder) status = "LOW_STOCK";
+        else                     status = "IN_STOCK";
 
         return new InventoryStatusResponse(
                 inv.getId(),

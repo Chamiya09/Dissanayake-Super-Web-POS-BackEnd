@@ -45,7 +45,7 @@ public class InventoryController {
 
     // ── GET /api/inventory/low-stock ──────────────────────────────────────────
     /**
-     * Returns only items where {@code stockQuantity < reorderLevel}.
+     * Returns only items where {@code stockQuantity <= reorderLevel}.
      */
     @GetMapping("/low-stock")
     public ResponseEntity<List<InventoryStatusResponse>> getLowStock() {

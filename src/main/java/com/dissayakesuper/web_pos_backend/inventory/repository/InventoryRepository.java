@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
@@ -20,6 +21,13 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
 
     /** Check whether an inventory record exists for a product. */
     boolean existsByProductId(Long productId);
+
+    /**
+     * Loads an inventory record with its Product eagerly via JOIN FETCH.
+     * Use this whenever the caller needs product fields after the transaction ends.
+     */
+    @Query("SELECT i FROM Inventory i JOIN FETCH i.product p LEFT JOIN FETCH p.supplier WHERE i.id = :id")
+    Optional<Inventory> findByIdWithProduct(@Param("id") Long id);
 
     /** Returns all records where current stock is at or below the reorder threshold.
      *  Uses JOIN FETCH to load the associated Product and its optional Supplier

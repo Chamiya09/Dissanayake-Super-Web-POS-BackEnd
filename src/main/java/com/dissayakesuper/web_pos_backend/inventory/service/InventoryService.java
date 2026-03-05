@@ -84,7 +84,7 @@ public class InventoryService {
     // ── LOW STOCK ─────────────────────────────────────────────────────────────
 
     /**
-     * Returns only inventory records where stockQuantity &lt; reorderLevel.
+     * Returns only inventory records where stockQuantity &lt;= reorderLevel.
      */
     @Transactional(readOnly = true)
     public List<Inventory> getLowStockInventory() {
@@ -168,7 +168,9 @@ public class InventoryService {
      */
     public Inventory editInventory(Long inventoryId,
                                    com.dissayakesuper.web_pos_backend.inventory.dto.EditInventoryRequest request) {
-        Inventory inv = inventoryRepository.findById(inventoryId)
+        // JOIN FETCH ensures the product is initialized before the transaction closes,
+        // preventing LazyInitializationException when the controller maps to a response DTO.
+        Inventory inv = inventoryRepository.findByIdWithProduct(inventoryId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Inventory record not found with id: " + inventoryId));
