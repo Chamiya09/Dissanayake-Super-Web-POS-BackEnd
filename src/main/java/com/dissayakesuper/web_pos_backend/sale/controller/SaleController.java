@@ -3,9 +3,13 @@ package com.dissayakesuper.web_pos_backend.sale.controller;
 import com.dissayakesuper.web_pos_backend.sale.dto.StatusRequest;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
+import com.dissayakesuper.web_pos_backend.sale.service.InvoicePdfService;
 import com.dissayakesuper.web_pos_backend.sale.service.SaleService;
 import jakarta.validation.Valid;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,12 +20,36 @@ import java.util.List;
 @CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
 public class SaleController {
 
-    private final SaleService saleService;
+    private final SaleService       saleService;
+    private final InvoicePdfService  invoicePdfService;
 
-    public SaleController(SaleService saleService) {
-        this.saleService = saleService;
+    public SaleController(SaleService saleService, InvoicePdfService invoicePdfService) {
+        this.saleService      = saleService;
+        this.invoicePdfService = invoicePdfService;
     }
+    // ── GET /api/sales/{id}/invoice ─────────────────────────────────────────
+    /**
+     * Generates and returns a PDF invoice for the given sale.
+     * The response carries {@code Content-Disposition: attachment} so the
+     * browser triggers a file download named
+     * {@code invoice-<receiptNo>.pdf}.
+     *
+     * @return 200 OK with the PDF binary, or 404 if the sale is not found
+     */
+    @GetMapping(value = "/{id}/invoice", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> downloadInvoice(@PathVariable Long id) {
+        Sale sale = saleService.getSaleById(id);
+        byte[] pdf = invoicePdfService.generateInvoice(sale);
 
+        String filename = "invoice-" + sale.getReceiptNo() + ".pdf";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDisposition(
+                ContentDisposition.attachment().filename(filename).build());
+        headers.setContentLength(pdf.length);
+
+        return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
+    }
     // ── GET /api/sales ────────────────────────────────────────────────────────
     /** Returns the full sales history. */
     @GetMapping
