@@ -71,6 +71,13 @@ public class ProductController {
         return ResponseEntity.noContent().build();
     }
 
+    // ── GET /api/products/unassigned ─────────────────────────────────────────
+    /** Returns only products with no supplier assigned (supplier_id IS NULL). */
+    @GetMapping("/unassigned")
+    public ResponseEntity<List<Product>> getUnassigned() {
+        return ResponseEntity.ok(service.getUnassignedProducts());
+    }
+
     // ── GET /api/products/by-supplier/{supplierId} ────────────────────────────
     /** Returns all products assigned to a specific supplier. */
     @GetMapping("/by-supplier/{supplierId}")

@@ -100,6 +100,13 @@ public class ProductService {
         repository.deleteById(id);
     }
 
+    // ── GET UNASSIGNED ────────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<Product> getUnassignedProducts() {
+        return repository.findBySupplierIsNull();
+    }
+
     // ── GET BY SUPPLIER ─────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)

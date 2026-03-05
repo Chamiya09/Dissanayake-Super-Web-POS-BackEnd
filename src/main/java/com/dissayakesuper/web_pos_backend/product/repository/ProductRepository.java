@@ -19,4 +19,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     /** Find all products assigned to a specific supplier. */
     List<Product> findBySupplierId(Long supplierId);
+
+    /** Find all products not yet linked to any supplier. */
+    List<Product> findBySupplierIsNull();
 }
