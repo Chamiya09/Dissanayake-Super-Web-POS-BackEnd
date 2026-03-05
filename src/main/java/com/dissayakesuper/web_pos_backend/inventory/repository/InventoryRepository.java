@@ -1,18 +1,22 @@
 package com.dissayakesuper.web_pos_backend.inventory.repository;
 
-import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
+import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 
 @Repository
 public interface InventoryRepository extends JpaRepository<Inventory, Long> {
 
     /** Find the inventory record linked to a specific product. */
     Optional<Inventory> findByProductId(Long productId);
+
+    /** Find the inventory record by the product's name (used during sale processing). */
+    Optional<Inventory> findByProductProductName(String productName);
 
     /** Check whether an inventory record exists for a product. */
     boolean existsByProductId(Long productId);

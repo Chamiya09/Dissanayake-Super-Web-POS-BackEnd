@@ -1,10 +1,12 @@
 package com.dissayakesuper.web_pos_backend.product.repository;
 
-import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.Optional;
+import com.dissayakesuper.web_pos_backend.product.entity.Product;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
@@ -14,4 +16,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     /** Find a product by SKU (useful for duplicate-check on update). */
     Optional<Product> findBySku(String sku);
+
+    /** Find all products assigned to a specific supplier. */
+    List<Product> findBySupplierId(Long supplierId);
 }

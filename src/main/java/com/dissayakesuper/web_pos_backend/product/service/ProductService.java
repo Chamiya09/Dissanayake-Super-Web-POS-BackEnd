@@ -1,14 +1,15 @@
 package com.dissayakesuper.web_pos_backend.product.service;
 
-import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
-import com.dissayakesuper.web_pos_backend.product.entity.Product;
-import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
+import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
+import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 
 @Service
 @Transactional
@@ -97,5 +98,20 @@ public class ProductService {
                     "Product not found with id: " + id);
         }
         repository.deleteById(id);
+    }
+
+    // ── GET BY SUPPLIER ─────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<Product> getProductsBySupplierId(Long supplierId) {
+        return repository.findBySupplierId(supplierId);
+    }
+
+    // ── UNASSIGN ────────────────────────────────────────────────────────────
+
+    public Product unassignProduct(Long id) {
+        Product product = getProductById(id);
+        product.setSupplier(null);
+        return repository.save(product);
     }
 }
