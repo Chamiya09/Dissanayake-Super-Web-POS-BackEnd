@@ -18,7 +18,8 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     boolean existsByProductId(Long productId);
 
     /** Returns all records where current stock is at or below the reorder threshold.
-     *  Uses JOIN FETCH to load the associated Product in a single query (avoids N+1). */
-    @Query("SELECT i FROM Inventory i JOIN FETCH i.product WHERE i.stockQuantity <= i.reorderLevel ORDER BY i.stockQuantity ASC")
+     *  Uses JOIN FETCH to load the associated Product and its optional Supplier
+     *  in a single query (avoids N+1). Supplier is LEFT JOIN because it is nullable. */
+    @Query("SELECT i FROM Inventory i JOIN FETCH i.product p LEFT JOIN FETCH p.supplier WHERE i.stockQuantity <= i.reorderLevel ORDER BY i.stockQuantity ASC")
     List<Inventory> findAllLowStock();
 }

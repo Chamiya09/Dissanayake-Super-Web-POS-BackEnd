@@ -9,5 +9,9 @@ public record LowStockItemDTO(
         double reorderLevel,
         String unit,
         /** Selling price (LKR) — forwarded to the frontend for order cost calculation. */
-        double sellingPrice
+        double sellingPrice,
+        /** Supplier company name — null if no supplier is assigned to this product. */
+        String supplierName,
+        /** Supplier contact email — null if no supplier is assigned to this product. */
+        String supplierEmail
 ) {}

@@ -1,5 +1,6 @@
 package com.dissayakesuper.web_pos_backend.product.entity;
 
+import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -51,6 +52,10 @@ public class Product {
 
     @Column(name = "reorder_level")
     private Double reorderLevel;    // Alert threshold — null means no alert
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id")
+    private Supplier supplier;      // nullable — not every product has a supplier assigned
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -114,6 +119,9 @@ public class Product {
 
     public Double getReorderLevel() { return reorderLevel; }
     public void setReorderLevel(Double reorderLevel) { this.reorderLevel = reorderLevel; }
+
+    public Supplier getSupplier() { return supplier; }
+    public void setSupplier(Supplier supplier) { this.supplier = supplier; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

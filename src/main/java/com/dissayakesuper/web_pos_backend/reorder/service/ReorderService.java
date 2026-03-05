@@ -154,17 +154,19 @@ public class ReorderService {
      * to the lightweight {@link LowStockItemDTO} consumed by the frontend.
      */
     private LowStockItemDTO toDTO(Inventory inv) {
+        var product  = inv.getProduct();
+        var supplier = product.getSupplier();
         return new LowStockItemDTO(
-                inv.getProduct().getId(),
-                inv.getProduct().getProductName(),
-                inv.getProduct().getSku(),
-                inv.getProduct().getCategory(),
+                product.getId(),
+                product.getProductName(),
+                product.getSku(),
+                product.getCategory(),
                 inv.getStockQuantity(),
                 inv.getReorderLevel(),
                 inv.getUnit(),
-                inv.getProduct().getSellingPrice() != null
-                        ? inv.getProduct().getSellingPrice().doubleValue()
-                        : 0.0
+                product.getSellingPrice() != null ? product.getSellingPrice().doubleValue() : 0.0,
+                supplier != null ? supplier.getCompanyName() : null,
+                supplier != null ? supplier.getEmail()       : null
         );
     }
 
