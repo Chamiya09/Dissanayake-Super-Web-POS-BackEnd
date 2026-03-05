@@ -176,6 +176,25 @@ public class InventoryService {
         if (request.reorderLevel() != null) inv.setReorderLevel(request.reorderLevel());
         if (request.unit()         != null) inv.setUnit(request.unit());
 
+        // ── Stock increment: new_stock = existing_stock + quantityToAdd ──────
+        if (request.quantityToAdd() != null && request.quantityToAdd() > 0) {
+            double newQty = inv.getStockQuantity() + request.quantityToAdd();
+            inv.setStockQuantity(newQty);
+            inv.setLastUpdated(LocalDateTime.now());
+
+            Inventory saved = inventoryRepository.save(inv);
+
+            inventoryLogRepository.save(InventoryLog.builder()
+                    .productId(saved.getProduct().getId())
+                    .productName(saved.getProduct().getProductName())
+                    .action("MANUAL_ADDITION")
+                    .quantityChanged(request.quantityToAdd())
+                    .stockAfter(newQty)
+                    .build());
+
+            return saved;
+        }
+
         return inventoryRepository.save(inv);
     }
 

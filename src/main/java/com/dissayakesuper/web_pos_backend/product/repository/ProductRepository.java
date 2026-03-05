@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
@@ -22,4 +23,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     /** Find all products not yet linked to any supplier. */
     List<Product> findBySupplierIsNull();
+
+    /** Returns products that do not yet have an Inventory record. */
+    @Query("SELECT p FROM Product p WHERE p.id NOT IN (SELECT i.product.id FROM Inventory i)")
+    List<Product> findProductsNotInInventory();
 }

@@ -93,6 +93,13 @@ public class ProductController {
         return ResponseEntity.ok(service.getProductBySku(sku));
     }
 
+    // ── GET /api/products/available-for-inventory ─────────────────────────────
+    /** Returns products that have no Inventory record yet (safe to add as new stock entries). */
+    @GetMapping("/available-for-inventory")
+    public ResponseEntity<List<Product>> getAvailableForInventory() {
+        return ResponseEntity.ok(service.getProductsAvailableForInventory());
+    }
+
     // ── PATCH /api/products/{id}/unassign ──────────────────────────────────────
     /** Removes the supplier association from a product. Returns the updated product. */
     @PatchMapping("/{id}/unassign")

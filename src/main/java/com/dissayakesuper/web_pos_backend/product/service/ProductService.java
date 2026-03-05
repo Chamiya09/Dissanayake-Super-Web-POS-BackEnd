@@ -28,6 +28,14 @@ public class ProductService {
         return repository.findAll();
     }
 
+    // ── AVAILABLE FOR INVENTORY ────────────────────────────────────────────────
+
+    /** Returns only products that have no Inventory record yet. */
+    @Transactional(readOnly = true)
+    public List<Product> getProductsAvailableForInventory() {
+        return repository.findProductsNotInInventory();
+    }
+
     // ── READ ONE ──────────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
