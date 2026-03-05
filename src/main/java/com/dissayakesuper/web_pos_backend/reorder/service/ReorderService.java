@@ -67,7 +67,7 @@ public class ReorderService {
                     .build();
 
             reorder.addItem(item);
-            total += itemDTO.quantity() * itemDTO.unitPrice();
+            total += itemDTO.quantity().doubleValue() * itemDTO.unitPrice();
         }
 
         reorder.setTotalAmount(total);

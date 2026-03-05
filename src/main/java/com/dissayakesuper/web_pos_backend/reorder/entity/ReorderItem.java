@@ -1,5 +1,7 @@
 package com.dissayakesuper.web_pos_backend.reorder.entity;
 
+import java.math.BigDecimal;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
@@ -27,8 +29,8 @@ public class ReorderItem {
     @Column(name = "product_id")
     private Long productId;
 
-    @Column(name = "quantity", nullable = false)
-    private Integer quantity;
+    @Column(name = "quantity", nullable = false, precision = 10, scale = 3)
+    private BigDecimal quantity;
 
     @Column(name = "unit_price", nullable = false)
     private Double unitPrice;

@@ -1,5 +1,7 @@
 package com.dissayakesuper.web_pos_backend.sale.entity;
 
+import java.math.BigDecimal;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 
 import jakarta.persistence.Column;
@@ -27,8 +29,8 @@ public class SaleItem {
     @Column(name = "product_id")
     private Long productId;
 
-    @Column(name = "quantity", nullable = false)
-    private Integer quantity;
+    @Column(name = "quantity", nullable = false, precision = 10, scale = 3)
+    private BigDecimal quantity;
 
     @Column(name = "unit_price", nullable = false)
     private Double unitPrice;
@@ -45,7 +47,7 @@ public class SaleItem {
 
     public SaleItem() {}
 
-    public SaleItem(String productName, Integer quantity, Double unitPrice, Double lineTotal) {
+    public SaleItem(String productName, BigDecimal quantity, Double unitPrice, Double lineTotal) {
         this.productName = productName;
         this.quantity    = quantity;
         this.unitPrice   = unitPrice;
@@ -63,8 +65,8 @@ public class SaleItem {
     public Long getProductId() { return productId; }
     public void setProductId(Long productId) { this.productId = productId; }
 
-    public Integer getQuantity() { return quantity; }
-    public void setQuantity(Integer quantity) { this.quantity = quantity; }
+    public BigDecimal getQuantity() { return quantity; }
+    public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
 
     public Double getUnitPrice() { return unitPrice; }
     public void setUnitPrice(Double unitPrice) { this.unitPrice = unitPrice; }
