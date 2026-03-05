@@ -7,6 +7,7 @@ import com.dissayakesuper.web_pos_backend.reorder.entity.Reorder;
 import com.dissayakesuper.web_pos_backend.reorder.entity.ReorderItem;
 import com.dissayakesuper.web_pos_backend.reorder.entity.Status;
 import com.dissayakesuper.web_pos_backend.reorder.repository.ReorderRepository;
+import com.dissayakesuper.web_pos_backend.supplier.repository.SupplierRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,13 +22,16 @@ public class ReorderService {
     private final ReorderRepository    reorderRepository;
     private final EmailService          emailService;
     private final InventoryRepository   inventoryRepository;
+    private final SupplierRepository    supplierRepository;
 
     public ReorderService(ReorderRepository reorderRepository,
                           EmailService emailService,
-                          InventoryRepository inventoryRepository) {
+                          InventoryRepository inventoryRepository,
+                          SupplierRepository supplierRepository) {
         this.reorderRepository  = reorderRepository;
         this.emailService       = emailService;
         this.inventoryRepository = inventoryRepository;
+        this.supplierRepository  = supplierRepository;
     }
 
     // ── CREATE ORDER ──────────────────────────────────────────────────────────
@@ -38,7 +42,7 @@ public class ReorderService {
      *
      * @throws ResponseStatusException 409 if orderRef already exists
      */
-    public ReorderResponseDTO createOrder(ReorderRequestDTO dto) {
+    public ReorderResponseDTO createOrder(ReorderRequestDTO dto, String managerName) {
         if (reorderRepository.existsByOrderRef(dto.orderRef())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -70,14 +74,29 @@ public class ReorderService {
 
         Reorder saved = reorderRepository.save(reorder);
 
+        // Resolve supplier display name for emails (null-safe: supplier link is optional)
+        String supplierName = supplierRepository.findByEmail(dto.supplierEmail())
+                .map(s -> s.getCompanyName())
+                .orElse(null);
+        String today = java.time.LocalDate.now().toString();
+
         // Fire-and-forget — runs on the Spring async executor so it does not
         // block the HTTP response or roll back the transaction on mail failure.
-        emailService.sendPurchaseOrderEmail(
+        emailService.sendSupplierPO(
                 saved.getSupplierEmail(),
+                supplierName,
                 saved.getOrderRef(),
                 dto.items(),
                 saved.getTotalAmount(),
-                "Purchasing Manager"   // TODO: pass authenticated user's name here
+                managerName
+        );
+        emailService.sendAdminNotification(
+                saved.getOrderRef(),
+                supplierName,
+                saved.getSupplierEmail(),
+                saved.getTotalAmount(),
+                managerName,
+                today
         );
 
         return ReorderResponseDTO.from(saved);

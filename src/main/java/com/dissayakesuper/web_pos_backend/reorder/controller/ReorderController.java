@@ -7,6 +7,7 @@ import com.dissayakesuper.web_pos_backend.reorder.service.ReorderService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -43,9 +44,13 @@ public class ReorderController {
      */
     @PostMapping("/create")
     public ResponseEntity<ReorderResponseDTO> createOrder(
-            @Valid @RequestBody ReorderRequestDTO dto) {
+            @Valid @RequestBody ReorderRequestDTO dto,
+            Authentication authentication) {
 
-        ReorderResponseDTO created = reorderService.createOrder(dto);
+        String managerName = (authentication != null && authentication.getName() != null)
+                ? authentication.getName()
+                : "Store Manager";
+        ReorderResponseDTO created = reorderService.createOrder(dto, managerName);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
