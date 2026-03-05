@@ -17,7 +17,8 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     /** Check whether an inventory record exists for a product. */
     boolean existsByProductId(Long productId);
 
-    /** Returns all records where current stock is at or below the reorder threshold. */
-    @Query("SELECT i FROM Inventory i WHERE i.stockQuantity <= i.reorderLevel")
+    /** Returns all records where current stock is at or below the reorder threshold.
+     *  Uses JOIN FETCH to load the associated Product in a single query (avoids N+1). */
+    @Query("SELECT i FROM Inventory i JOIN FETCH i.product WHERE i.stockQuantity <= i.reorderLevel ORDER BY i.stockQuantity ASC")
     List<Inventory> findAllLowStock();
 }

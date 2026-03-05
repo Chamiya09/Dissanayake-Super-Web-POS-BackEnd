@@ -20,6 +20,13 @@ public class ReorderItem {
     @Column(name = "product_name", nullable = false, length = 255)
     private String productName;
 
+    /**
+     * Soft reference to the {@code products} table (nullable).
+     * Stored as a plain column so the reorder entry survives product deletion.
+     */
+    @Column(name = "product_id")
+    private Long productId;
+
     @Column(name = "quantity", nullable = false)
     private Integer quantity;
 

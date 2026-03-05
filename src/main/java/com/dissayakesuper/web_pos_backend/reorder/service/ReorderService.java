@@ -1,5 +1,7 @@
 package com.dissayakesuper.web_pos_backend.reorder.service;
 
+import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
+import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.reorder.dto.*;
 import com.dissayakesuper.web_pos_backend.reorder.entity.Reorder;
 import com.dissayakesuper.web_pos_backend.reorder.entity.ReorderItem;
@@ -16,13 +18,16 @@ import java.util.List;
 @Transactional
 public class ReorderService {
 
-    private final ReorderRepository reorderRepository;
-    private final EmailService emailService;
+    private final ReorderRepository    reorderRepository;
+    private final EmailService          emailService;
+    private final InventoryRepository   inventoryRepository;
 
     public ReorderService(ReorderRepository reorderRepository,
-                          EmailService emailService) {
-        this.reorderRepository = reorderRepository;
-        this.emailService = emailService;
+                          EmailService emailService,
+                          InventoryRepository inventoryRepository) {
+        this.reorderRepository  = reorderRepository;
+        this.emailService       = emailService;
+        this.inventoryRepository = inventoryRepository;
     }
 
     // ── CREATE ORDER ──────────────────────────────────────────────────────────
@@ -52,6 +57,7 @@ public class ReorderService {
         for (ReorderItemRequestDTO itemDTO : dto.items()) {
             ReorderItem item = ReorderItem.builder()
                     .productName(itemDTO.productName())
+                    .productId(itemDTO.productId())      // nullable soft-link
                     .quantity(itemDTO.quantity())
                     .unitPrice(itemDTO.unitPrice())
                     .build();
@@ -130,24 +136,35 @@ public class ReorderService {
         return ReorderResponseDTO.from(reorder);   // dirty-checking flushes on commit
     }
 
-    // ── GET LOW-STOCK ITEMS (MOCKED) ──────────────────────────────────────────
-
     /**
-     * Returns a list of products whose current stock is at or below their
-     * reorder level.
-     *
-     * <p><strong>Note:</strong> This list is currently mocked. Once the
-     * Inventory module exposes a suitable query method this should be replaced
-     * with a real repository call via an injected {@code InventoryRepository}.
+     * Returns all {@code Inventory} rows where {@code stock_quantity <= reorder_level},
+     * fetched live from the database and mapped to {@link LowStockItemDTO}.
+     * The JPQL query is declared in {@link InventoryRepository#findAllLowStock()}.
      */
     @Transactional(readOnly = true)
     public List<LowStockItemDTO> getLowStockItems() {
-        return List.of(
-                new LowStockItemDTO(101L, "Basmati Rice (5 kg)",           "RCE-001", "Dry Goods",   4.0,  20.0, "bags"),
-                new LowStockItemDTO(102L, "Sunflower Cooking Oil (1 L)",    "OIL-002", "Oils & Fats", 0.0,  15.0, "bottles"),
-                new LowStockItemDTO(103L, "Full Cream Milk Powder (400 g)", "MLK-003", "Dairy",       7.0,  25.0, "tins"),
-                new LowStockItemDTO(104L, "White Sugar (1 kg)",             "SUG-004", "Dry Goods",   3.0,  30.0, "bags"),
-                new LowStockItemDTO(105L, "Coconut Oil (750 ml)",           "COL-005", "Oils & Fats", 2.0,  10.0, "bottles")
+        return inventoryRepository.findAllLowStock()
+                .stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
+    /**
+     * Maps a live {@link Inventory} row (with its joined {@code Product})
+     * to the lightweight {@link LowStockItemDTO} consumed by the frontend.
+     */
+    private LowStockItemDTO toDTO(Inventory inv) {
+        return new LowStockItemDTO(
+                inv.getProduct().getId(),
+                inv.getProduct().getProductName(),
+                inv.getProduct().getSku(),
+                inv.getProduct().getCategory(),
+                inv.getStockQuantity(),
+                inv.getReorderLevel(),
+                inv.getUnit(),
+                inv.getProduct().getSellingPrice() != null
+                        ? inv.getProduct().getSellingPrice().doubleValue()
+                        : 0.0
         );
     }
 

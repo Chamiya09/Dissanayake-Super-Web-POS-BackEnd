@@ -7,5 +7,7 @@ public record LowStockItemDTO(
         String category,
         double currentStock,
         double reorderLevel,
-        String unit
+        String unit,
+        /** Selling price (LKR) — forwarded to the frontend for order cost calculation. */
+        double sellingPrice
 ) {}

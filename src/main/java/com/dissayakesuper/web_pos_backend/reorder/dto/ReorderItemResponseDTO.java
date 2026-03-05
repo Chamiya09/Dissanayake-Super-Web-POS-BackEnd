@@ -4,6 +4,7 @@ import com.dissayakesuper.web_pos_backend.reorder.entity.ReorderItem;
 
 public record ReorderItemResponseDTO(
         Long   id,
+        Long   productId,
         String productName,
         int    quantity,
         double unitPrice,
@@ -13,6 +14,7 @@ public record ReorderItemResponseDTO(
     public static ReorderItemResponseDTO from(ReorderItem item) {
         return new ReorderItemResponseDTO(
                 item.getId(),
+                item.getProductId(),
                 item.getProductName(),
                 item.getQuantity(),
                 item.getUnitPrice(),
