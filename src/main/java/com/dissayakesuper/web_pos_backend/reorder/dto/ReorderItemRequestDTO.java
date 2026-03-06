@@ -1,6 +1,9 @@
 package com.dissayakesuper.web_pos_backend.reorder.dto;
 
-import jakarta.validation.constraints.Min;
+import java.math.BigDecimal;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -19,8 +22,9 @@ public record ReorderItemRequestDTO(
         Long productId,
 
         @NotNull(message = "Quantity is required")
-        @Min(value = 1, message = "Quantity must be at least 1")
-        Integer quantity,
+        @DecimalMin(value = "0.001", message = "Quantity must be at least 0.001")
+        @Digits(integer = 7, fraction = 3)
+        BigDecimal quantity,
 
         @NotNull(message = "Unit price is required")
         @PositiveOrZero(message = "Unit price must be zero or positive")

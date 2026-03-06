@@ -1,7 +1,18 @@
 package com.dissayakesuper.web_pos_backend.sale.entity;
 
+import java.math.BigDecimal;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
-import jakarta.persistence.*;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "sale_items")
@@ -14,8 +25,12 @@ public class SaleItem {
     @Column(name = "product_name", nullable = false, length = 255)
     private String productName;
 
-    @Column(name = "quantity", nullable = false)
-    private Integer quantity;
+    /** FK to the products table — used by SaleService to deduct inventory stock. */
+    @Column(name = "product_id")
+    private Long productId;
+
+    @Column(name = "quantity", nullable = false, precision = 10, scale = 3)
+    private BigDecimal quantity;
 
     @Column(name = "unit_price", nullable = false)
     private Double unitPrice;
@@ -32,7 +47,7 @@ public class SaleItem {
 
     public SaleItem() {}
 
-    public SaleItem(String productName, Integer quantity, Double unitPrice, Double lineTotal) {
+    public SaleItem(String productName, BigDecimal quantity, Double unitPrice, Double lineTotal) {
         this.productName = productName;
         this.quantity    = quantity;
         this.unitPrice   = unitPrice;
@@ -47,8 +62,11 @@ public class SaleItem {
     public String getProductName() { return productName; }
     public void setProductName(String productName) { this.productName = productName; }
 
-    public Integer getQuantity() { return quantity; }
-    public void setQuantity(Integer quantity) { this.quantity = quantity; }
+    public Long getProductId() { return productId; }
+    public void setProductId(Long productId) { this.productId = productId; }
+
+    public BigDecimal getQuantity() { return quantity; }
+    public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
 
     public Double getUnitPrice() { return unitPrice; }
     public void setUnitPrice(Double unitPrice) { this.unitPrice = unitPrice; }

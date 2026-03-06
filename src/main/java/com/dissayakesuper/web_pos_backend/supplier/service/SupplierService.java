@@ -1,23 +1,28 @@
 package com.dissayakesuper.web_pos_backend.supplier.service;
 
-import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
-import com.dissayakesuper.web_pos_backend.supplier.dto.SupplierRequest;
-import com.dissayakesuper.web_pos_backend.supplier.repository.SupplierRepository;
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
+import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
+import com.dissayakesuper.web_pos_backend.supplier.dto.SupplierRequest;
+import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
+import com.dissayakesuper.web_pos_backend.supplier.repository.SupplierRepository;
 
 @Service
 @Transactional
 public class SupplierService {
 
     private final SupplierRepository repository;
+    private final ProductRepository productRepository;
 
-    public SupplierService(SupplierRepository repository) {
+    public SupplierService(SupplierRepository repository, ProductRepository productRepository) {
         this.repository = repository;
+        this.productRepository = productRepository;
     }
 
     // ── READ ALL ──────────────────────────────────────────────────────────────
@@ -91,5 +96,19 @@ public class SupplierService {
                     "Supplier not found with id: " + id);
         }
         repository.deleteById(id);
+    }
+
+    // ── ASSIGN PRODUCTS ───────────────────────────────────────────────────────
+
+    public void assignProducts(Long supplierId, List<Long> productIds) {
+        Supplier supplier = getSupplierById(supplierId);
+        List<Product> products = productRepository.findAllById(productIds);
+        if (products.size() != productIds.size()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "One or more product IDs were not found.");
+        }
+        products.forEach(p -> p.setSupplier(supplier));
+        productRepository.saveAll(products);
     }
 }

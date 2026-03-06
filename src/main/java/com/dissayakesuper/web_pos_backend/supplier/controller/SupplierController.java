@@ -1,14 +1,25 @@
 package com.dissayakesuper.web_pos_backend.supplier.controller;
 
-import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
-import com.dissayakesuper.web_pos_backend.supplier.dto.SupplierRequest;
-import com.dissayakesuper.web_pos_backend.supplier.service.SupplierService;
-import jakarta.validation.Valid;
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import com.dissayakesuper.web_pos_backend.supplier.dto.AssignProductsRequest;
+import com.dissayakesuper.web_pos_backend.supplier.dto.SupplierRequest;
+import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
+import com.dissayakesuper.web_pos_backend.supplier.service.SupplierService;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/suppliers")
@@ -59,4 +70,12 @@ public class SupplierController {
         service.deleteSupplier(id);
         return ResponseEntity.noContent().build();
     }
-}
+    // ── POST /api/suppliers/{id}/products ────────────────────────────────
+    /** Assigns a list of products to a supplier. Returns 204 No Content. */
+    @PostMapping("/{id}/products")
+    public ResponseEntity<Void> assignProducts(
+            @PathVariable Long id,
+            @Valid @RequestBody AssignProductsRequest request) {
+        service.assignProducts(id, request.productIds());
+        return ResponseEntity.noContent().build();
+    }}

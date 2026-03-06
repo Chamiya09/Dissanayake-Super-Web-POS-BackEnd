@@ -1,17 +1,28 @@
 package com.dissayakesuper.web_pos_backend.inventory.controller;
 
+import java.util.List;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.dissayakesuper.web_pos_backend.inventory.dto.AddStockRequest;
+import com.dissayakesuper.web_pos_backend.inventory.dto.AdjustStockRequest;
 import com.dissayakesuper.web_pos_backend.inventory.dto.EditInventoryRequest;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryAnalyticsDTO;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryStatusResponse;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
 import com.dissayakesuper.web_pos_backend.inventory.service.InventoryService;
-import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/inventory")
@@ -46,7 +57,7 @@ public class InventoryController {
 
     // ── GET /api/inventory/low-stock ──────────────────────────────────────────
     /**
-     * Returns only items where {@code stockQuantity < reorderLevel}.
+     * Returns only items where {@code stockQuantity <= reorderLevel}.
      */
     @GetMapping("/low-stock")
     public ResponseEntity<List<InventoryStatusResponse>> getLowStock() {
@@ -99,6 +110,19 @@ public class InventoryController {
             @PathVariable Long id,
             @Valid @RequestBody EditInventoryRequest request) {
         Inventory updated = service.editInventory(id, request);
+        return ResponseEntity.ok(InventoryStatusResponse.from(updated));
+    }
+
+    // ── POST /api/inventory/adjust/{id} ───────────────────────────────────────
+    /**
+     * Adjusts inventory stock by a positive or negative amount.
+     * Mandatory notes field records the reason for the adjustment.
+     */
+    @PostMapping("/adjust/{id}")
+    public ResponseEntity<InventoryStatusResponse> adjustStock(
+            @PathVariable Long id,
+            @Valid @RequestBody AdjustStockRequest request) {
+        Inventory updated = service.adjustStock(id, request.adjustmentAmount(), request.notes());
         return ResponseEntity.ok(InventoryStatusResponse.from(updated));
     }
 

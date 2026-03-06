@@ -1,14 +1,15 @@
 package com.dissayakesuper.web_pos_backend.product.service;
 
-import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
-import com.dissayakesuper.web_pos_backend.product.entity.Product;
-import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
+import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
+import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 
 @Service
 @Transactional
@@ -25,6 +26,14 @@ public class ProductService {
     @Transactional(readOnly = true)
     public List<Product> getAllProducts() {
         return repository.findAll();
+    }
+
+    // ── AVAILABLE FOR INVENTORY ────────────────────────────────────────────────
+
+    /** Returns only products that have no Inventory record yet. */
+    @Transactional(readOnly = true)
+    public List<Product> getProductsAvailableForInventory() {
+        return repository.findProductsNotInInventory();
     }
 
     // ── READ ONE ──────────────────────────────────────────────────────────────
@@ -97,5 +106,37 @@ public class ProductService {
                     "Product not found with id: " + id);
         }
         repository.deleteById(id);
+    }
+
+    // ── GET UNASSIGNED ────────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<Product> getUnassignedProducts() {
+        return repository.findBySupplierIsNull();
+    }
+
+    // ── GET BY SUPPLIER ─────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<Product> getProductsBySupplierId(Long supplierId) {
+        return repository.findBySupplierId(supplierId);
+    }
+
+    // ── SEARCH BY SKU ─────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public Product getProductBySku(String sku) {
+        return repository.findBySku(sku)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No product found with SKU: '" + sku + "'"));
+    }
+
+    // ── UNASSIGN ────────────────────────────────────────────────────────────
+
+    public Product unassignProduct(Long id) {
+        Product product = getProductById(id);
+        product.setSupplier(null);
+        return repository.save(product);
     }
 }

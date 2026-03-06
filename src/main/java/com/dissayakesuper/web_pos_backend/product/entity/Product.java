@@ -1,12 +1,27 @@
 package com.dissayakesuper.web_pos_backend.product.entity;
 
-import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.*;
-import org.hibernate.annotations.CreationTimestamp;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+
+import org.hibernate.annotations.CreationTimestamp;
+
+import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "products")
@@ -53,6 +68,11 @@ public class Product {
     @Column(name = "reorder_level")
     private Double reorderLevel;    // Alert threshold — null means no alert
 
+    // Expose the raw FK as a plain Long so Jackson serializes it without touching the lazy proxy
+    @Column(name = "supplier_id", insertable = false, updatable = false)
+    private Long supplierId;
+
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supplier_id")
     private Supplier supplier;      // nullable — not every product has a supplier assigned
@@ -120,6 +140,9 @@ public class Product {
     public Double getReorderLevel() { return reorderLevel; }
     public void setReorderLevel(Double reorderLevel) { this.reorderLevel = reorderLevel; }
 
+    public Long getSupplierId() { return supplierId; }
+
+    @JsonIgnore
     public Supplier getSupplier() { return supplier; }
     public void setSupplier(Supplier supplier) { this.supplier = supplier; }
 

@@ -1,5 +1,7 @@
 package com.dissayakesuper.web_pos_backend.user.dto;
 
+import java.time.LocalDateTime;
+
 public class UserResponse {
 
     private Long id;
@@ -8,6 +10,7 @@ public class UserResponse {
     private String email;
     private String role;
     private boolean active;
+    private LocalDateTime createdAt;
 
     public UserResponse() {}
 
@@ -37,4 +40,7 @@ public class UserResponse {
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

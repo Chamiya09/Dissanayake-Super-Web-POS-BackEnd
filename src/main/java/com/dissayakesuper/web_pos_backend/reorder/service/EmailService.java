@@ -153,13 +153,13 @@ public class EmailService {
         StringBuilder rows = new StringBuilder();
         int rowNum = 1;
         for (ReorderItemRequestDTO item : items) {
-            double lineTotal = item.quantity() * item.unitPrice();
+            double lineTotal = item.quantity().doubleValue() * item.unitPrice();
             String rowBg = (rowNum % 2 == 0) ? "#f8fafc" : "#ffffff";
             rows.append(String.format("""
                     <tr style="background:%s;">
                       <td style="%s text-align:center;">%d</td>
                       <td style="%s">%s</td>
-                      <td style="%s text-align:center;">%d</td>
+                      <td style="%s text-align:center;">%s</td>
                       <td style="%s text-align:right;">LKR %.2f</td>
                       <td style="%s text-align:right;font-weight:600;">LKR %.2f</td>
                     </tr>
@@ -167,7 +167,7 @@ public class EmailService {
                     rowBg,
                     TD_STYLE, rowNum,
                     TD_STYLE, escapeHtml(item.productName()),
-                    TD_STYLE, item.quantity(),
+                    TD_STYLE, item.quantity().toPlainString(),
                     TD_STYLE, item.unitPrice(),
                     TD_STYLE, lineTotal
             ));

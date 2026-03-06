@@ -1,14 +1,26 @@
 package com.dissayakesuper.web_pos_backend.product.controller;
 
+import java.util.List;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.service.ProductService;
-import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/products")
@@ -58,5 +70,40 @@ public class ProductController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         service.deleteProduct(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ── GET /api/products/unassigned ─────────────────────────────────────────
+    /** Returns only products with no supplier assigned (supplier_id IS NULL). */
+    @GetMapping("/unassigned")
+    public ResponseEntity<List<Product>> getUnassigned() {
+        return ResponseEntity.ok(service.getUnassignedProducts());
+    }
+
+    // ── GET /api/products/by-supplier/{supplierId} ────────────────────────────
+    /** Returns all products assigned to a specific supplier. */
+    @GetMapping("/by-supplier/{supplierId}")
+    public ResponseEntity<List<Product>> getBySupplierId(@PathVariable Long supplierId) {
+        return ResponseEntity.ok(service.getProductsBySupplierId(supplierId));
+    }
+
+    // ── GET /api/products/search?sku={sku} ───────────────────────────────────
+    /** Returns the product matching the exact SKU. 404 if not found. */
+    @GetMapping("/search")
+    public ResponseEntity<Product> searchBySku(@RequestParam String sku) {
+        return ResponseEntity.ok(service.getProductBySku(sku));
+    }
+
+    // ── GET /api/products/available-for-inventory ─────────────────────────────
+    /** Returns products that have no Inventory record yet (safe to add as new stock entries). */
+    @GetMapping("/available-for-inventory")
+    public ResponseEntity<List<Product>> getAvailableForInventory() {
+        return ResponseEntity.ok(service.getProductsAvailableForInventory());
+    }
+
+    // ── PATCH /api/products/{id}/unassign ──────────────────────────────────────
+    /** Removes the supplier association from a product. Returns the updated product. */
+    @PatchMapping("/{id}/unassign")
+    public ResponseEntity<Product> unassign(@PathVariable Long id) {
+        return ResponseEntity.ok(service.unassignProduct(id));
     }
 }

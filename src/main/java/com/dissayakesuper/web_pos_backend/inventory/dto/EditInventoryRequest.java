@@ -5,7 +5,8 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Request body for PUT /api/inventory/edit/{id}
- * Both fields are optional — null values are ignored (partial update).
+ * All fields are optional — null values are ignored (partial update).
+ * quantityToAdd, when present and positive, is added to the current stock.
  */
 public record EditInventoryRequest(
 
@@ -13,5 +14,8 @@ public record EditInventoryRequest(
         Double reorderLevel,
 
         @Size(max = 20, message = "unit must be 20 characters or fewer.")
-        String unit
+        String unit,
+
+        @DecimalMin(value = "0.0", inclusive = false, message = "quantityToAdd must be greater than zero.")
+        Double quantityToAdd
 ) {}

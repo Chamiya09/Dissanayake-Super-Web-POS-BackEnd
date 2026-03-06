@@ -1,10 +1,19 @@
 package com.dissayakesuper.web_pos_backend.inventory.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import java.time.LocalDateTime;
+
 import org.hibernate.annotations.CreationTimestamp;
 
-import java.time.LocalDateTime;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Audit log — one row is written every time stock is manually updated.
@@ -31,7 +40,11 @@ public class InventoryLog {
     @Column(name = "product_name", nullable = false, length = 255)
     private String productName;
 
-    /** Positive = stock added. Negative = stock removed (future use). */
+    /** Reason for this stock change. e.g. SALE_REDUCTION, MANUAL_ADDITION, ADJUSTMENT */
+    @Column(name = "action", nullable = false, length = 50)
+    private String action;
+
+    /** Positive = stock added. Negative = stock removed by a sale. */
     @Column(name = "quantity_changed", nullable = false)
     private Double quantityChanged;
 
@@ -42,4 +55,8 @@ public class InventoryLog {
     @CreationTimestamp
     @Column(name = "timestamp", nullable = false, updatable = false)
     private LocalDateTime timestamp;
+
+    /** Optional reason / notes for this stock change (e.g. mandatory for ADJUSTMENT). */
+    @Column(name = "notes", length = 500)
+    private String notes;
 }

@@ -1,5 +1,13 @@
 package com.dissayakesuper.web_pos_backend.inventory.service;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryAnalyticsDTO;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryStatusResponse;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
@@ -8,13 +16,6 @@ import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepos
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
-import java.time.LocalDateTime;
-import java.util.List;
 
 @Service
 @Transactional
@@ -84,7 +85,7 @@ public class InventoryService {
     // ── LOW STOCK ─────────────────────────────────────────────────────────────
 
     /**
-     * Returns only inventory records where stockQuantity &lt; reorderLevel.
+     * Returns only inventory records where stockQuantity &lt;= reorderLevel.
      */
     @Transactional(readOnly = true)
     public List<Inventory> getLowStockInventory() {
@@ -133,12 +134,62 @@ public class InventoryService {
 
         Inventory saved = inventoryRepository.save(inventory);
 
-        // ── Audit log ──────────────────────────────────────────────────────
+        // ── Audit log: record the manual stock addition ──────────────────────
         inventoryLogRepository.save(InventoryLog.builder()
                 .productId(saved.getProduct().getId())
                 .productName(saved.getProduct().getProductName())
+                .action("MANUAL_ADDITION")
                 .quantityChanged(quantityToAdd)
                 .stockAfter(newQty)
+                .build());
+
+        return saved;
+    }
+
+    // ── ADJUST STOCK (positive or negative) ───────────────────────────────────
+
+    /**
+     * Adjusts the stock of an inventory record by the given amount.
+     * Positive values increase stock, negative values decrease it.
+     * The resulting stock must be >= 0.
+     *
+     * @param inventoryId      the target inventory record
+     * @param adjustmentAmount positive or negative delta
+     * @param notes            mandatory reason for the adjustment
+     * @return the saved Inventory record
+     */
+    public Inventory adjustStock(Long inventoryId, Double adjustmentAmount, String notes) {
+        if (adjustmentAmount == null || adjustmentAmount == 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Adjustment amount must not be zero.");
+        }
+
+        Inventory inventory = inventoryRepository.findByIdWithProduct(inventoryId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Inventory record not found with id: " + inventoryId));
+
+        double newQty = inventory.getStockQuantity() + adjustmentAmount;
+        if (newQty < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Adjustment would result in negative stock ("
+                            + newQty + "). Current stock is "
+                            + inventory.getStockQuantity() + ".");
+        }
+
+        inventory.setStockQuantity(newQty);
+        inventory.setLastUpdated(LocalDateTime.now());
+        Inventory saved = inventoryRepository.save(inventory);
+
+        inventoryLogRepository.save(InventoryLog.builder()
+                .productId(saved.getProduct().getId())
+                .productName(saved.getProduct().getProductName())
+                .action("ADJUSTMENT")
+                .quantityChanged(adjustmentAmount)
+                .stockAfter(newQty)
+                .notes(notes)
                 .build());
 
         return saved;
@@ -167,13 +218,34 @@ public class InventoryService {
      */
     public Inventory editInventory(Long inventoryId,
                                    com.dissayakesuper.web_pos_backend.inventory.dto.EditInventoryRequest request) {
-        Inventory inv = inventoryRepository.findById(inventoryId)
+        // JOIN FETCH ensures the product is initialized before the transaction closes,
+        // preventing LazyInitializationException when the controller maps to a response DTO.
+        Inventory inv = inventoryRepository.findByIdWithProduct(inventoryId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Inventory record not found with id: " + inventoryId));
 
         if (request.reorderLevel() != null) inv.setReorderLevel(request.reorderLevel());
         if (request.unit()         != null) inv.setUnit(request.unit());
+
+        // ── Stock increment: new_stock = existing_stock + quantityToAdd ──────
+        if (request.quantityToAdd() != null && request.quantityToAdd() > 0) {
+            double newQty = inv.getStockQuantity() + request.quantityToAdd();
+            inv.setStockQuantity(newQty);
+            inv.setLastUpdated(LocalDateTime.now());
+
+            Inventory saved = inventoryRepository.save(inv);
+
+            inventoryLogRepository.save(InventoryLog.builder()
+                    .productId(saved.getProduct().getId())
+                    .productName(saved.getProduct().getProductName())
+                    .action("MANUAL_ADDITION")
+                    .quantityChanged(request.quantityToAdd())
+                    .stockAfter(newQty)
+                    .build());
+
+            return saved;
+        }
 
         return inventoryRepository.save(inv);
     }
