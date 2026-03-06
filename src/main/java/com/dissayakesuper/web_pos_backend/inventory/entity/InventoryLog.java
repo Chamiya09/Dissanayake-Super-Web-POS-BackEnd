@@ -55,4 +55,8 @@ public class InventoryLog {
     @CreationTimestamp
     @Column(name = "timestamp", nullable = false, updatable = false)
     private LocalDateTime timestamp;
+
+    /** Optional reason / notes for this stock change (e.g. mandatory for ADJUSTMENT). */
+    @Column(name = "notes", length = 500)
+    private String notes;
 }
