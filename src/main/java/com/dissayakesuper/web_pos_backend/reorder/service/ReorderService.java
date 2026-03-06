@@ -1,20 +1,25 @@
 package com.dissayakesuper.web_pos_backend.reorder.service;
 
-import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
-import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
-import com.dissayakesuper.web_pos_backend.reorder.dto.*;
-import com.dissayakesuper.web_pos_backend.reorder.entity.Reorder;
-import com.dissayakesuper.web_pos_backend.reorder.entity.ReorderItem;
-import com.dissayakesuper.web_pos_backend.reorder.entity.Status;
-import com.dissayakesuper.web_pos_backend.reorder.repository.ReorderRepository;
-import com.dissayakesuper.web_pos_backend.supplier.repository.SupplierRepository;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
+import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
+import com.dissayakesuper.web_pos_backend.reorder.dto.LowStockItemDTO;
+import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderItemRequestDTO;
+import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderRequestDTO;
+import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderResponseDTO;
+import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderUpdateDTO;
+import com.dissayakesuper.web_pos_backend.reorder.entity.Reorder;
+import com.dissayakesuper.web_pos_backend.reorder.entity.ReorderItem;
+import com.dissayakesuper.web_pos_backend.reorder.entity.Status;
+import com.dissayakesuper.web_pos_backend.reorder.repository.ReorderRepository;
+import com.dissayakesuper.web_pos_backend.supplier.repository.SupplierRepository;
 
 @Service
 @Transactional
@@ -206,7 +211,8 @@ public class ReorderService {
         Reorder reorder = findOrThrow(id);
         validateTransition(reorder.getStatus(), newStatus, reorder.getOrderRef());
         reorder.setStatus(newStatus);
-        return ReorderResponseDTO.from(reorder);   // dirty-checking flushes on commit
+        Reorder saved = reorderRepository.save(reorder);
+        return ReorderResponseDTO.from(saved);
     }
 
     /**
