@@ -1,5 +1,6 @@
 package com.dissayakesuper.web_pos_backend.sale.service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
@@ -16,8 +17,6 @@ import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.entity.SaleItem;
 import com.dissayakesuper.web_pos_backend.sale.repository.SaleRepository;
-
-import java.util.ArrayList;
 
 @Service
 @Transactional
@@ -145,14 +144,22 @@ public class SaleService {
         }
 
         // ── Step 2: Update top-level sale fields ──────────────────────────────
-        sale.setTotalAmount(request.totalAmount());
         sale.setPaymentMethod(request.paymentMethod());
 
-        // ── Step 3: Replace items and deduct new quantities ───────────────────
+        // ── Step 3: Replace items, recalculate subtotals, and deduct new quantities ──
         // Clearing with orphanRemoval=true schedules DELETE for all old SaleItem rows.
         sale.getItems().clear();
 
+        double grandTotal = 0.0;
+
         for (SaleItemRequest itemReq : request.items()) {
+            // Validate unit price is positive
+            if (itemReq.unitPrice() <= 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Unit price for '" + itemReq.productName() + "' must be a positive value.");
+            }
+
             Inventory inv = (itemReq.productId() != null
                     ? inventoryRepository.findByProductId(itemReq.productId())
                     : inventoryRepository.findByProductProductName(itemReq.productName()))
@@ -173,13 +180,18 @@ public class SaleService {
             inv.setStockQuantity(newStock);
             inventoryRepository.save(inv);
 
+            // Server-side recalculation: subtotal = quantity × unit_price
+            double recalculatedLineTotal = itemReq.quantity().doubleValue() * itemReq.unitPrice();
+
             SaleItem newItem = new SaleItem(
                     itemReq.productName(),
                     itemReq.quantity(),
                     itemReq.unitPrice(),
-                    itemReq.lineTotal());
+                    recalculatedLineTotal);
             newItem.setProductId(itemReq.productId());
             sale.addItem(newItem);
+
+            grandTotal += recalculatedLineTotal;
 
             inventoryLogRepository.save(InventoryLog.builder()
                     .productId(inv.getProduct().getId())
@@ -189,6 +201,9 @@ public class SaleService {
                     .stockAfter(newStock)
                     .build());
         }
+
+        // Grand total update: sum of all recalculated subtotals (overrides frontend value)
+        sale.setTotalAmount(grandTotal);
 
         return saleRepository.save(sale);
     }
