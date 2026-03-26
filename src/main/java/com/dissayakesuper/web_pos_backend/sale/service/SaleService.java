@@ -2,6 +2,7 @@ package com.dissayakesuper.web_pos_backend.sale.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -115,10 +116,11 @@ public class SaleService {
         // ── Load ──────────────────────────────────────────────────────────────
         Sale sale = getSaleById(saleId);
 
-        if ("Voided".equalsIgnoreCase(sale.getStatus())) {
+        if ("Voided".equalsIgnoreCase(sale.getStatus()) ||
+                "Returned".equalsIgnoreCase(sale.getStatus())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Sale " + sale.getReceiptNo() + " is voided and cannot be edited.");
+                    "Sale " + sale.getReceiptNo() + " is " + sale.getStatus() + " and cannot be edited.");
         }
 
         // ── Step 1: Reverse old inventory deductions ──────────────────────────
@@ -213,13 +215,79 @@ public class SaleService {
     public Sale updateSaleStatus(Long id, String newStatus) {
         Sale sale = getSaleById(id);
 
-        if ("Voided".equalsIgnoreCase(sale.getStatus())) {
+        if ("Voided".equalsIgnoreCase(sale.getStatus()) ||
+                "Returned".equalsIgnoreCase(sale.getStatus())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Sale " + sale.getReceiptNo() + " is already voided and cannot be modified.");
+                    "Sale " + sale.getReceiptNo() + " is already " + sale.getStatus() + " and cannot be modified.");
         }
 
         sale.setStatus(newStatus);
+        return saleRepository.save(sale);
+    }
+
+    // ── RETURN SALE (restock inventory) ──────────────────────────────────────
+
+    /**
+     * Processes a sales return:
+     * <ol>
+     *   <li>Validates the sale exists and its status is "Completed".</li>
+     *   <li>For every {@link SaleItem}, restores the sold quantity back to stock.</li>
+     *   <li>Writes a {@link InventoryLog} entry (action = RESTOCK_RETURNED_SALE) per item.</li>
+     *   <li>Marks the sale status as "Returned" and persists it.</li>
+     * </ol>
+     *
+     * @param saleId the ID of the sale to return
+     * @return the updated {@link Sale} with status "Returned"
+     * @throws ResponseStatusException 404 if sale not found, 409 if already Voided/Returned
+     */
+    public Sale returnSale(Long saleId) {
+
+        // ── 1. Load & validate ────────────────────────────────────────────────
+        Sale sale = getSaleById(saleId);
+
+        String currentStatus = sale.getStatus();
+        if ("Voided".equalsIgnoreCase(currentStatus) ||
+                "Returned".equalsIgnoreCase(currentStatus)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Sale " + sale.getReceiptNo() + " is already " + currentStatus +
+                    " and cannot be returned.");
+        }
+
+        // ── 2. Restock inventory for every sold item ──────────────────────────
+        for (SaleItem item : sale.getItems()) {
+
+            Optional<Inventory> inventoryOpt = (item.getProductId() != null
+                    ? inventoryRepository.findByProductId(item.getProductId())
+                    : inventoryRepository.findByProductProductName(item.getProductName()));
+
+            if (inventoryOpt.isEmpty()) {
+                // If the inventory or product is completely gone, we skip restocking
+                // rather than failing the entire return process for the customer.
+                continue;
+            }
+
+            Inventory inventory = inventoryOpt.get();
+
+            double returnedQty  = item.getQuantity().doubleValue();
+            double restoredStock = inventory.getStockQuantity() + returnedQty;
+            inventory.setStockQuantity(restoredStock);
+            inventoryRepository.save(inventory);
+
+            // ── 3. Write audit log entry ──────────────────────────────────────
+            inventoryLogRepository.save(InventoryLog.builder()
+                    .productId(inventory.getProduct().getId())
+                    .productName(inventory.getProduct().getProductName())
+                    .action("RESTOCK_RETURNED_SALE")
+                    .quantityChanged(returnedQty)
+                    .stockAfter(restoredStock)
+                    .notes("Restocked from returned sale ID: " + saleId)
+                    .build());
+        }
+
+        // ── 4. Mark sale as Returned ──────────────────────────────────────────
+        sale.setStatus("Returned");
         return saleRepository.save(sale);
     }
 }
