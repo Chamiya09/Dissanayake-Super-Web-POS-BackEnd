@@ -241,6 +241,7 @@ public class SaleService {
      * @return the updated {@link Sale} with status "Returned"
      * @throws ResponseStatusException 404 if sale not found, 409 if already Voided/Returned
      */
+    @Transactional
     public Sale returnSale(Long saleId) {
 
         // ── 1. Load & validate ────────────────────────────────────────────────
