@@ -87,7 +87,7 @@ public class SecurityConfig {
 
             .authorizeHttpRequests(auth -> auth
                     // Public: login + Spring Boot error rendering
-                    .requestMatchers("/api/auth/**", "/error").permitAll()
+                    .requestMatchers("/api/auth/**", "/error", "/api/v1/reorder/accept").permitAll()
                     // Public: CORS pre-flight
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     // Everything else requires authentication

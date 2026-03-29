@@ -4,11 +4,13 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderItemRequestDTO;
 
@@ -47,12 +49,18 @@ public class EmailService {
     @Value("${spring.mail.username}")
     private String fromAddress;
 
+    @Value("${spring.mail.password}")
+    private String smtpPassword;
+
     @Value("${app.mail.sender-display-name:Dissanayake Super \u2013 Orders}")
     private String displayName;
 
     /** Destination for admin order-alert emails. */
     @Value("${app.admin.email:admin@dissanayakesuper.lk}")
     private String adminEmail;
+
+    @Value("${app.reorder.accept-url-base:http://localhost:8080/api/v1/reorder/accept}")
+    private String supplierAcceptUrlBase;
 
     public EmailService(JavaMailSender mailSender) {
         this.mailSender = mailSender;
@@ -70,18 +78,30 @@ public class EmailService {
      * @param totalAmount  Calculated order total (LKR)
      * @param managerName  Full name of the manager who authorised the order
      */
-    @Async
     public void sendSupplierPO(
             String to,
             String supplierName,
             String orderRef,
             List<ReorderItemRequestDTO> items,
             double totalAmount,
-            String managerName) {
+        String managerName,
+        String acceptToken,
+        boolean revisedOrder) {
 
-        String subject = "Purchase Order \u2014 " + orderRef;
-        String html    = buildSupplierHtml(to, supplierName, orderRef, items, totalAmount, managerName);
-        sendHtml(to, subject, html, "supplier PO", orderRef);
+      String subject = (revisedOrder ? "Updated Purchase Order \u2014 " : "Purchase Order \u2014 ") + orderRef;
+      String acceptUrl = supplierAcceptUrlBase + "?token=" + acceptToken;
+      String html = buildSupplierHtml(
+          to,
+          supplierName,
+          orderRef,
+          items,
+          totalAmount,
+          managerName,
+          acceptUrl,
+          revisedOrder
+      );
+        validateMailConfiguration();
+        sendHtmlOrThrow(to, subject, html, "supplier PO", orderRef);
     }
 
     /**
@@ -95,7 +115,6 @@ public class EmailService {
      * @param managerName   Full name of the manager who placed the order
      * @param placedAt      Date the order was placed (yyyy-MM-dd)
      */
-    @Async
     public void sendAdminNotification(
             String orderRef,
             String supplierName,
@@ -106,7 +125,7 @@ public class EmailService {
 
         String subject = "\uD83D\uDCE6 New Purchase Order: " + orderRef;
         String html    = buildAdminHtml(orderRef, supplierName, supplierEmail, totalAmount, managerName, placedAt);
-        sendHtml(adminEmail, subject, html, "admin notification", orderRef);
+    sendHtmlBestEffort(adminEmail, subject, html, "admin notification", orderRef);
     }
 
     // â”€â”€ Shared send helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -116,8 +135,8 @@ public class EmailService {
      * All checked exceptions and {@link MailException}s are caught here so
      * that mail failures never propagate to the transaction layer.
      */
-    private void sendHtml(String to, String subject, String html,
-                          String kind, String orderRef) {
+    private void sendHtmlOrThrow(String to, String subject, String html,
+                   String kind, String orderRef) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -130,7 +149,31 @@ public class EmailService {
         } catch (MailException | MessagingException | java.io.UnsupportedEncodingException ex) {
             log.error("[EmailService] Failed to send {} to {} (ref: {}): {}",
                     kind, to, orderRef, ex.getMessage(), ex);
+        throw new ResponseStatusException(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            "Failed to send supplier email via Gmail SMTP. Check MAIL_USERNAME/MAIL_APP_PASSWORD and Gmail App Password setup."
+        );
         }
+    }
+
+    private void sendHtmlBestEffort(String to, String subject, String html,
+                    String kind, String orderRef) {
+      try {
+        sendHtmlOrThrow(to, subject, html, kind, orderRef);
+      } catch (ResponseStatusException ex) {
+        log.warn("[EmailService] Best-effort email '{}' skipped: {}", kind, ex.getReason());
+      }
+    }
+
+    private void validateMailConfiguration() {
+      if (!StringUtils.hasText(fromAddress)
+          || !StringUtils.hasText(smtpPassword)
+          || "changeme".equalsIgnoreCase(smtpPassword.trim())) {
+        throw new ResponseStatusException(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            "Mail is not configured. Set MAIL_USERNAME and MAIL_APP_PASSWORD (Gmail App Password)."
+        );
+      }
     }
 
     // â”€â”€ Supplier PO HTML builder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -141,7 +184,9 @@ public class EmailService {
             String orderRef,
             List<ReorderItemRequestDTO> items,
             double totalAmount,
-            String managerName) {
+          String managerName,
+          String acceptUrl,
+          boolean revisedOrder) {
 
         String today = java.time.LocalDate.now()
                 .format(java.time.format.DateTimeFormatter.ofPattern("dd MMMM yyyy"));
@@ -149,6 +194,10 @@ public class EmailService {
         String greeting = (supplierName != null && !supplierName.isBlank())
                 ? "Dear " + escapeHtml(supplierName) + ","
                 : "Dear Supplier,";
+
+        String orderMetaLine = revisedOrder
+          ? "This purchase order has been revised. Please review the latest details and confirm acceptance."
+          : "Please find below the purchase order details. Kindly confirm receipt and advise on the expected delivery date at your earliest convenience.";
 
         StringBuilder rows = new StringBuilder();
         int rowNum = 1;
@@ -218,8 +267,23 @@ public class EmailService {
                           <td style="padding:24px 32px 0;">
                             <p style="margin:0 0 6px;font-size:14px;color:#0f172a;">%s</p>
                             <p style="margin:0 0 20px;font-size:13px;color:#475569;line-height:1.6;">
-                              Please find below the purchase order details. Kindly confirm receipt and advise on the expected delivery date at your earliest convenience.
+                              %s
                             </p>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding:0 32px 20px;">
+                            <table width="100%%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                              <tr>
+                                <td style="background:#ecfeff;border:1px solid #99f6e4;border-radius:10px;padding:14px;">
+                                  <div style="font-size:12px;color:#0f766e;font-weight:700;letter-spacing:.02em;margin-bottom:8px;">Supplier Action Required</div>
+                                  <p style="margin:0 0 12px;font-size:12px;color:#134e4a;line-height:1.6;">
+                                    Click the button below to accept this order. Once accepted, this order will be locked and cannot be revised again.
+                                  </p>
+                                  <a href="%s" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:700;letter-spacing:.01em;">Accept Order</a>
+                                </td>
+                              </tr>
+                            </table>
                           </td>
                         </tr>
                         <!-- Items table -->
@@ -272,6 +336,8 @@ public class EmailService {
                 escapeHtml(fromAddress), orderRef,
                 today, escapeHtml(supplierEmail),
                 greeting,
+                escapeHtml(orderMetaLine),
+                escapeHtml(acceptUrl),
                 TH_STYLE, TH_STYLE, TH_STYLE, TH_STYLE, TH_STYLE,
                 rows,
                 totalAmount,

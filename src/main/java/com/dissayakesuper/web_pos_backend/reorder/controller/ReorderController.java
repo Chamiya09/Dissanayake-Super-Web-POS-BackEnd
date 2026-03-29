@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -77,8 +79,12 @@ public class ReorderController {
     @PutMapping("/{id}")
     public ResponseEntity<ReorderResponseDTO> updateOrder(
             @PathVariable Long id,
-            @Valid @RequestBody ReorderUpdateDTO dto) {
-        return ResponseEntity.ok(reorderService.updateOrder(id, dto));
+            @Valid @RequestBody ReorderUpdateDTO dto,
+            Authentication authentication) {
+        String managerName = (authentication != null && authentication.getName() != null)
+                ? authentication.getName()
+                : "Store Manager";
+        return ResponseEntity.ok(reorderService.updateOrder(id, dto, managerName));
     }
 
     // ── GET /api/v1/reorder/low-stock ─────────────────────────────────────────
@@ -134,4 +140,60 @@ public class ReorderController {
         }
         return ResponseEntity.ok(reorderService.updateStatus(id, newStatus));
     }
+
+        @GetMapping(value = "/accept", produces = MediaType.TEXT_HTML_VALUE)
+        public ResponseEntity<String> acceptBySupplier(@RequestParam("token") String token) {
+                try {
+                        ReorderResponseDTO accepted = reorderService.acceptOrderByToken(token);
+                        String html = """
+                                        <!DOCTYPE html>
+                                        <html lang=\"en\">
+                                        <head>
+                                            <meta charset=\"UTF-8\" />
+                                            <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+                                            <title>Order Accepted</title>
+                                            <style>
+                                                body { font-family: Arial, sans-serif; background:#f1f5f9; margin:0; padding:24px; }
+                                                .card { max-width:560px; margin:48px auto; background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:28px; box-shadow:0 6px 20px rgba(0,0,0,.08); }
+                                                .ok { color:#0f766e; font-weight:700; font-size:22px; margin:0 0 10px; }
+                                                .muted { color:#475569; font-size:14px; line-height:1.6; margin:0; }
+                                                .ref { margin-top:14px; color:#0f172a; font-size:13px; font-weight:700; }
+                                            </style>
+                                        </head>
+                                        <body>
+                                            <div class=\"card\">
+                                                <p class=\"ok\">Order Accepted</p>
+                                                <p class=\"muted\">Thank you. This purchase order has been confirmed and locked for further email adjustments.</p>
+                                                <p class=\"ref\">Reference: %s</p>
+                                            </div>
+                                        </body>
+                                        </html>
+                                        """.formatted(accepted.orderRef());
+                        return ResponseEntity.ok(html);
+                } catch (ResponseStatusException ex) {
+                        String html = """
+                                        <!DOCTYPE html>
+                                        <html lang=\"en\">
+                                        <head>
+                                            <meta charset=\"UTF-8\" />
+                                            <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+                                            <title>Order Acceptance Failed</title>
+                                            <style>
+                                                body { font-family: Arial, sans-serif; background:#f8fafc; margin:0; padding:24px; }
+                                                .card { max-width:560px; margin:48px auto; background:#fff; border:1px solid #fecaca; border-radius:14px; padding:28px; box-shadow:0 6px 20px rgba(0,0,0,.06); }
+                                                .title { color:#b91c1c; font-weight:700; font-size:22px; margin:0 0 10px; }
+                                                .msg { color:#7f1d1d; font-size:14px; line-height:1.6; margin:0; }
+                                            </style>
+                                        </head>
+                                        <body>
+                                            <div class=\"card\">
+                                                <p class=\"title\">Unable to Accept Order</p>
+                                                <p class=\"msg\">%s</p>
+                                            </div>
+                                        </body>
+                                        </html>
+                                        """.formatted(ex.getReason() == null ? "Invalid or expired acceptance link." : ex.getReason());
+                        return ResponseEntity.status(ex.getStatusCode()).contentType(MediaType.TEXT_HTML).body(html);
+                }
+        }
 }
