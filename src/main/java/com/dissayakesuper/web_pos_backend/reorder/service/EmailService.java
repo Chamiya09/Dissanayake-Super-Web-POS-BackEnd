@@ -160,6 +160,7 @@ public class EmailService {
             helper.setFrom(fromAddress, displayName);
             helper.setTo(to);
             helper.setSubject(subject);
+            message.setHeader("X-Web-POS-System", "true");
             helper.setText(html, true);
             mailSender.send(message);
             log.info("[EmailService] {} sent \u2192 {} (ref: {})", kind, to, orderRef);

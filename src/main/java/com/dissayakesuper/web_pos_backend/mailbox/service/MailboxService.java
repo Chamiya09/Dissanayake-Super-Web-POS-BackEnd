@@ -40,6 +40,19 @@ public class MailboxService {
 
     private static final int MAX_PREVIEW_LEN = 160;
     private static final int MAX_BODY_LEN = 12000;
+    private static final String WEB_POS_HEADER = "X-Web-POS-System";
+        private static final List<String> WEB_POS_SUBJECT_MARKERS = List.of(
+            "purchase order",
+            "updated purchase order",
+            "new purchase order",
+            "outgoing mail"
+    );
+        private static final List<String> WEB_POS_BODY_MARKERS = List.of(
+            "dissanayake super inventory system",
+            "reorder management dashboard",
+            "this email was sent by the dissanayake super mailbox service",
+            "supplier action required"
+        );
 
     private static final DateTimeFormatter DATE_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH);
@@ -82,6 +95,7 @@ public class MailboxService {
             helper.setFrom(gmailUsername, senderDisplayName);
             helper.setTo(request.to().trim());
             helper.setSubject(request.subject().trim());
+                        message.setHeader(WEB_POS_HEADER, "true");
                 String messageBodyHtml = String.format("""
                     <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;">
                       <p style="margin:0;font-size:13px;color:#334155;line-height:1.8;">%s</p>
@@ -160,7 +174,10 @@ public class MailboxService {
             List<MailboxMessageDTO> result = new ArrayList<>(messages.length);
             for (int i = messages.length - 1; i >= 0; i--) {
                 try {
-                    result.add(toDto(messages[i], category));
+                    MailboxMessageDTO dto = toDto(messages[i], category);
+                    if (isWebPosMail(messages[i], dto)) {
+                        result.add(dto);
+                    }
                 } catch (Exception perMailEx) {
                     log.warn("[MailboxService] Skipping unreadable message #{} in {}: {}",
                             messages[i].getMessageNumber(), folderName, perMailEx.getMessage());
@@ -308,5 +325,32 @@ public class MailboxService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Mail credentials are missing. Set MAIL_USERNAME and MAIL_APP_PASSWORD.");
         }
+    }
+
+    private boolean isWebPosMail(Message message, MailboxMessageDTO dto) {
+        try {
+            String[] header = message.getHeader(WEB_POS_HEADER);
+            if (header != null && header.length > 0 && "true".equalsIgnoreCase(header[0])) {
+                return true;
+            }
+        } catch (Exception ignored) {
+            // Fallback to signature matching if header cannot be read.
+        }
+
+        String subject = sanitizeOrDefault(dto.subject(), "").toLowerCase(Locale.ENGLISH);
+        String fromName = sanitizeOrDefault(dto.from(), "").toLowerCase(Locale.ENGLISH);
+        String fromEmail = sanitizeOrDefault(dto.fromEmail(), "").toLowerCase(Locale.ENGLISH);
+        String body = sanitizeOrDefault(dto.body(), "").toLowerCase(Locale.ENGLISH);
+
+        boolean subjectLooksPos = WEB_POS_SUBJECT_MARKERS.stream().anyMatch(subject::contains);
+        String normalizedFromName = fromName.replace('\u2013', '-').replace('\u2014', '-');
+        boolean senderLooksPos = normalizedFromName.contains("dissanayake super - orders") ||
+            fromName.contains("dissanayake super") ||
+            fromName.contains("orders") ||
+            fromEmail.equalsIgnoreCase(gmailUsername);
+        boolean bodyLooksPos = WEB_POS_BODY_MARKERS.stream().anyMatch(body::contains);
+
+        // Require a strict POS signature: subject + sender + body markers.
+        return subjectLooksPos && senderLooksPos && bodyLooksPos;
     }
 }
