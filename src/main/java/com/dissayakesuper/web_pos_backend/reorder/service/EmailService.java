@@ -155,7 +155,7 @@ public class EmailService {
             double totalAmount,
             String confirmedAt
     ) {
-        String subject = "Supplier Confirmed Order: " + orderRef;
+      String subject = "Purchase Order Confirmed - " + orderRef;
 
         String body = String.format("""
                 <div style="background:#ecfeff;border:1px solid #99f6e4;border-radius:10px;padding:14px;">
@@ -197,7 +197,7 @@ public class EmailService {
         String html = EmailUiTemplate.wrapInCommonLayout(
                 subject,
                 "Confirmed",
-                "Supplier Confirmation Received",
+          "Purchase Order Confirmation Received",
                 "Reference: " + orderRef,
                 body,
                 "Internal confirmation notice from Dissanayake Super Inventory System."

@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -48,7 +47,9 @@ public class MailboxService {
             "purchase order",
             "updated purchase order",
             "new purchase order",
-            "outgoing mail"
+            "outgoing mail",
+            "supplier confirmed order",
+            "purchase order confirmed"
     );
         private static final List<String> WEB_POS_BODY_MARKERS = List.of(
             "dissanayake super inventory system",
