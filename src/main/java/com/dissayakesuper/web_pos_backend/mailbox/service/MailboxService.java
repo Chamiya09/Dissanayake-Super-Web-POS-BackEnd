@@ -55,7 +55,9 @@ public class MailboxService {
             "dissanayake super inventory system",
             "reorder management dashboard",
             "this email was sent by the dissanayake super mailbox service",
-            "supplier action required"
+            "supplier action required",
+            "internal confirmation notice from dissanayake super inventory system",
+            "purchase order confirmation received"
         );
 
     private static final DateTimeFormatter DATE_TIME_FORMAT =
@@ -375,7 +377,8 @@ public class MailboxService {
             fromEmail.equalsIgnoreCase(gmailUsername);
         boolean bodyLooksPos = WEB_POS_BODY_MARKERS.stream().anyMatch(body::contains);
 
-        // Require a strict POS signature: subject + sender + body markers.
-        return subjectLooksPos && senderLooksPos && bodyLooksPos;
+        // Accept all system mails by sender signature, while still preferring
+        // known subject/body markers for stronger classification.
+        return senderLooksPos && (subjectLooksPos || bodyLooksPos || fromEmail.equalsIgnoreCase(gmailUsername));
     }
 }
