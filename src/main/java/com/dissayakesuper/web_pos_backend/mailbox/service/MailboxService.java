@@ -20,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.dissayakesuper.web_pos_backend.mailbox.dto.MailboxMessageDTO;
 import com.dissayakesuper.web_pos_backend.mailbox.dto.SendMailboxEmailRequestDTO;
+import com.dissayakesuper.web_pos_backend.shared.mail.EmailUiTemplate;
 
 import jakarta.mail.BodyPart;
 import jakarta.mail.Flags;
@@ -81,7 +82,22 @@ public class MailboxService {
             helper.setFrom(gmailUsername, senderDisplayName);
             helper.setTo(request.to().trim());
             helper.setSubject(request.subject().trim());
-            helper.setText(request.body().trim(), false);
+                String messageBodyHtml = String.format("""
+                    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;">
+                      <p style="margin:0;font-size:13px;color:#334155;line-height:1.8;">%s</p>
+                    </div>
+                    """, EmailUiTemplate.plainTextToHtml(request.body().trim()));
+
+                String html = EmailUiTemplate.wrapInCommonLayout(
+                    request.subject().trim(),
+                    "Mailbox",
+                    "Outgoing Mail",
+                    "Sent from Dissanayake Super mailbox module",
+                    messageBodyHtml,
+                    "This email was sent by the Dissanayake Super mailbox service."
+                );
+
+                helper.setText(html, true);
             mailSender.send(message);
         } catch (Exception ex) {
             log.error("[MailboxService] Failed to send Gmail message: {}", ex.getMessage(), ex);

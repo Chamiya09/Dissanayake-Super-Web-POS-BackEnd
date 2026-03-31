@@ -55,14 +55,20 @@ public class InventoryService {
         List<Inventory> all = inventoryRepository.findAll();
 
         long tracked    = all.size();
-        long lowStock   = all.stream().filter(i -> i.getStockQuantity() > 0
-                                                   && i.getStockQuantity() <= i.getReorderLevel()).count();
-        long outOfStock = all.stream().filter(i -> i.getStockQuantity() <= 0).count();
+        long lowStock   = all.stream().filter(i -> {
+                double qty = i.getStockQuantity() != null ? i.getStockQuantity() : 0.0;
+                double reorder = i.getReorderLevel() != null ? i.getReorderLevel() : 0.0;
+                return qty > 0 && qty <= reorder;
+            }).count();
+        long outOfStock = all.stream().filter(i -> {
+                double qty = i.getStockQuantity() != null ? i.getStockQuantity() : 0.0;
+                return qty <= 0;
+            }).count();
         double totalValue = all.stream()
                 .mapToDouble(i -> {
-                    double qty   = i.getStockQuantity();
-                    double price = i.getProduct().getSellingPrice() != null
-                            ? i.getProduct().getSellingPrice().doubleValue() : 0.0;
+                double qty   = i.getStockQuantity() != null ? i.getStockQuantity() : 0.0;
+                double price = i.getProduct() != null && i.getProduct().getSellingPrice() != null
+                    ? i.getProduct().getSellingPrice().doubleValue() : 0.0;
                     return qty * price;
                 })
                 .sum();
