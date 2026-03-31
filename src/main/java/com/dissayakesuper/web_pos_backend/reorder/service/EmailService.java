@@ -145,6 +145,67 @@ public class EmailService {
     sendHtmlBestEffort(adminEmail, subject, html, "admin notification", orderRef);
     }
 
+    /**
+     * Sends an internal notification once supplier confirms an order from the
+     * mail acceptance link.
+     */
+    public void sendSupplierConfirmationDoneMail(
+            String orderRef,
+            String supplierEmail,
+            double totalAmount,
+            String confirmedAt
+    ) {
+        String subject = "Supplier Confirmed Order: " + orderRef;
+
+        String body = String.format("""
+                <div style="background:#ecfeff;border:1px solid #99f6e4;border-radius:10px;padding:14px;">
+                  <div style="font-size:12px;font-weight:700;color:#0f766e;letter-spacing:.02em;margin-bottom:6px;">Confirmation Received</div>
+                  <p style="margin:0;font-size:12px;color:#134e4a;line-height:1.6;">
+                    Supplier has confirmed this purchase order via the secure acceptance link.
+                  </p>
+                </div>
+
+                <table width="100%%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-collapse:collapse;">
+                  <tr>
+                    <td style="padding:8px 0;font-size:12px;color:#64748b;width:150px;">Order Reference</td>
+                    <td style="padding:8px 0;font-size:13px;font-weight:700;color:#0f172a;">%s</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;font-size:12px;color:#64748b;">Supplier Email</td>
+                    <td style="padding:8px 0;font-size:13px;color:#0f172a;">%s</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;font-size:12px;color:#64748b;">Confirmed At</td>
+                    <td style="padding:8px 0;font-size:13px;color:#0f172a;">%s</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;font-size:12px;color:#64748b;">Order Total</td>
+                    <td style="padding:8px 0;font-size:13px;font-weight:700;color:#0f172a;">LKR %.2f</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;font-size:12px;color:#64748b;">Status</td>
+                    <td style="padding:8px 0;font-size:13px;font-weight:700;color:#1d4ed8;">CONFIRMED</td>
+                  </tr>
+                </table>
+                """,
+                escapeHtml(orderRef),
+                escapeHtml(supplierEmail),
+                escapeHtml(confirmedAt),
+                totalAmount
+        );
+
+        String html = EmailUiTemplate.wrapInCommonLayout(
+                subject,
+                "Confirmed",
+                "Supplier Confirmation Received",
+                "Reference: " + orderRef,
+                body,
+                "Internal confirmation notice from Dissanayake Super Inventory System."
+        );
+
+        sendHtmlBestEffort(adminEmail, subject, html, "supplier confirmation", orderRef);
+    }
+
     // â”€â”€ Shared send helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**

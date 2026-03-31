@@ -223,6 +223,17 @@ public class ReorderService {
         reorder.setAcceptedAt(LocalDateTime.now());
         reorder.setSupplierAcceptToken(null);
         Reorder saved = reorderRepository.save(reorder);
+
+        String confirmedAt = saved.getAcceptedAt() != null
+            ? saved.getAcceptedAt().toString()
+            : LocalDateTime.now().toString();
+        emailService.sendSupplierConfirmationDoneMail(
+            saved.getOrderRef(),
+            saved.getSupplierEmail(),
+            saved.getTotalAmount(),
+            confirmedAt
+        );
+
         return ReorderResponseDTO.from(saved);
     }
 
