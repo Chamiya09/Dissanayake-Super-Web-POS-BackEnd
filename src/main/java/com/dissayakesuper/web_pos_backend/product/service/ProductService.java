@@ -100,12 +100,19 @@ public class ProductService {
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     public void deleteProduct(Long id) {
-        if (!repository.existsById(id)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Product not found with id: " + id);
+        Product product = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Product not found with id: " + id));
+
+        // Explicitly remove supplier assignment before delete so all supplier views
+        // and queries observe this relationship cleanup in the same transaction.
+        if (product.getSupplierId() != null) {
+            product.setSupplier(null);
+            repository.save(product);
         }
-        repository.deleteById(id);
+
+        repository.delete(product);
     }
 
     // ── GET UNASSIGNED ────────────────────────────────────────────────────────
