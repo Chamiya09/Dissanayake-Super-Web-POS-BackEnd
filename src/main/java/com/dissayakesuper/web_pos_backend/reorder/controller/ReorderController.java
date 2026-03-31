@@ -151,6 +151,7 @@ public class ReorderController {
                                         <head>
                                             <meta charset=\"UTF-8\" />
                                             <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+                                            <meta http-equiv=\"refresh\" content=\"3;url=https://mail.google.com/mail/u/0/#inbox\" />
                                             <title>Order Accepted</title>
                                             <style>
                                                 body { font-family: Arial, sans-serif; background:#f1f5f9; margin:0; padding:24px; }
@@ -158,13 +159,21 @@ public class ReorderController {
                                                 .ok { color:#0f766e; font-weight:700; font-size:22px; margin:0 0 10px; }
                                                 .muted { color:#475569; font-size:14px; line-height:1.6; margin:0; }
                                                 .ref { margin-top:14px; color:#0f172a; font-size:13px; font-weight:700; }
+                                                .redirect { margin-top:16px; color:#334155; font-size:13px; }
+                                                .redirect a { color:#0c4a6e; font-weight:700; text-decoration:none; }
                                             </style>
+                                            <script>
+                                                window.setTimeout(function() {
+                                                    window.location.href = 'https://mail.google.com/mail/u/0/#inbox';
+                                                }, 3000);
+                                            </script>
                                         </head>
                                         <body>
                                             <div class=\"card\">
                                                 <p class=\"ok\">Order Accepted</p>
                                                 <p class=\"muted\">Thank you. This purchase order has been confirmed and locked for further email adjustments.</p>
                                                 <p class=\"ref\">Reference: %s</p>
+                                                <p class=\"redirect\">Redirecting to Gmail... <a href=\"https://mail.google.com/mail/u/0/#inbox\" rel=\"noopener noreferrer\">Open now</a></p>
                                             </div>
                                         </body>
                                         </html>
