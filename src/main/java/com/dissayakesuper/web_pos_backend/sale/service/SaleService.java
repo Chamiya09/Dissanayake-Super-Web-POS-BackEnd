@@ -281,8 +281,6 @@ public class SaleService {
             itemsById.put(item.getId(), item);
         }
 
-        BigDecimal refundedAmount = BigDecimal.ZERO;
-
         for (SaleReturnItemRequest returnItem : request.items()) {
             SaleItem saleItem = itemsById.get(returnItem.saleItemId());
             if (saleItem == null) {
@@ -298,9 +296,6 @@ public class SaleService {
                         "Return quantity for '" + saleItem.getProductName() + "' exceeds available returnable quantity. Available: "
                                 + remainingQty + ", requested: " + returnItem.quantity());
             }
-
-            BigDecimal lineRefund = returnItem.quantity().multiply(BigDecimal.valueOf(saleItem.getUnitPrice()));
-            refundedAmount = refundedAmount.add(lineRefund);
 
             saleItem.setReturnedQuantity(getReturnedQty(saleItem).add(returnItem.quantity()));
 
@@ -337,19 +332,21 @@ public class SaleService {
         boolean allReturned = sale.getItems().stream().allMatch(item -> remainingQty(item).signum() == 0);
         boolean anyReturned = sale.getItems().stream().anyMatch(item -> getReturnedQty(item).signum() > 0);
 
+        BigDecimal recalculatedTotal = sale.getItems().stream()
+                .map(item -> remainingQty(item).multiply(BigDecimal.valueOf(item.getUnitPrice())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        if (recalculatedTotal.signum() < 0) {
+            recalculatedTotal = BigDecimal.ZERO;
+        }
+        sale.setTotalAmount(recalculatedTotal.doubleValue());
+
         if (allReturned) {
             sale.setStatus("Returned");
             sale.setTotalAmount(0.0);
         } else if (anyReturned) {
             sale.setStatus("Partially Returned");
-
-            Double currentTotalValue = sale.getTotalAmount();
-            BigDecimal currentTotal = BigDecimal.valueOf(currentTotalValue != null ? currentTotalValue : 0.0);
-            BigDecimal updatedTotal = currentTotal.subtract(refundedAmount);
-            if (updatedTotal.signum() < 0) {
-                updatedTotal = BigDecimal.ZERO;
-            }
-            sale.setTotalAmount(updatedTotal.setScale(2, RoundingMode.HALF_UP).doubleValue());
         }
 
         return saleRepository.save(sale);
