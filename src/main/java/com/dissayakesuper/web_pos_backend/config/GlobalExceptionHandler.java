@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -36,6 +37,13 @@ public class GlobalExceptionHandler {
         int status = ex.getStatusCode().value();
         String message = ex.getReason() != null ? ex.getReason() : ex.getMessage();
         return ResponseEntity.status(status).body(body(status, message));
+    }
+
+    /* ── Missing endpoint/static resource (404) ───────────────────────────── */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoResource(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(body(404, "Endpoint not found: " + ex.getResourcePath()));
     }
 
     /* ── Catch-all (500) ────────────────────────────────────────────────────── */
