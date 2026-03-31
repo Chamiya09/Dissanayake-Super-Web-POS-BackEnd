@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.dissayakesuper.web_pos_backend.sale.dto.SaleReturnRequest;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
 import com.dissayakesuper.web_pos_backend.sale.dto.StatusRequest;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
@@ -113,15 +114,20 @@ public class SaleController {
      */
     @PostMapping("/{id}/return")
     public ResponseEntity<Sale> returnSale(@PathVariable Long id) {
-        System.out.println("====== returnSale called with ID: " + id + " ======");
-        try {
-            Sale returned = saleService.returnSale(id);
-            System.out.println("====== returnSale SUCCESS ======");
-            return ResponseEntity.ok(returned);
-        } catch (Exception e) {
-            System.out.println("====== returnSale FAILED: " + e.getClass().getName() + " ======");
-            e.printStackTrace();
-            throw e;
-        }
+        Sale returned = saleService.returnSale(id);
+        return ResponseEntity.ok(returned);
+    }
+
+    // ── POST /api/sales/{id}/return-items ─────────────────────────────────────
+    /**
+     * Processes an item-level return for a sale.
+     * Allows selecting specific sold items and return quantities.
+     */
+    @PostMapping("/{id}/return-items")
+    public ResponseEntity<Sale> returnSaleItems(
+            @PathVariable Long id,
+            @Valid @RequestBody SaleReturnRequest request) {
+        Sale returned = saleService.returnSelectedItems(id, request);
+        return ResponseEntity.ok(returned);
     }
 }

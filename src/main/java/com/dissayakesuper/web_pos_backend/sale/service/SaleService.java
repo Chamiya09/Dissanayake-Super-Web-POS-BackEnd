@@ -1,7 +1,9 @@
 package com.dissayakesuper.web_pos_backend.sale.service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
@@ -14,6 +16,8 @@ import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepository;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleItemRequest;
+import com.dissayakesuper.web_pos_backend.sale.dto.SaleReturnItemRequest;
+import com.dissayakesuper.web_pos_backend.sale.dto.SaleReturnRequest;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.entity.SaleItem;
@@ -117,7 +121,8 @@ public class SaleService {
         Sale sale = getSaleById(saleId);
 
         if ("Voided".equalsIgnoreCase(sale.getStatus()) ||
-                "Returned".equalsIgnoreCase(sale.getStatus())) {
+            "Returned".equalsIgnoreCase(sale.getStatus()) ||
+            "Partially Returned".equalsIgnoreCase(sale.getStatus())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Sale " + sale.getReceiptNo() + " is " + sale.getStatus() + " and cannot be edited.");
@@ -243,52 +248,97 @@ public class SaleService {
      */
     @Transactional
     public Sale returnSale(Long saleId) {
+        Sale sale = getSaleById(saleId);
+        List<SaleReturnItemRequest> fullReturnItems = sale.getItems().stream()
+                .map(item -> {
+                    var remainingQty = remainingQty(item);
+                    if (remainingQty.signum() <= 0) {
+                        return null;
+                    }
+                    return new SaleReturnItemRequest(item.getId(), remainingQty);
+                })
+                .filter(item -> item != null)
+                .toList();
 
-        // ── 1. Load & validate ────────────────────────────────────────────────
+        return returnSelectedItems(saleId, new SaleReturnRequest(fullReturnItems));
+    }
+
+    @Transactional
+    public Sale returnSelectedItems(Long saleId, SaleReturnRequest request) {
         Sale sale = getSaleById(saleId);
 
         String currentStatus = sale.getStatus();
-        if ("Voided".equalsIgnoreCase(currentStatus) ||
-                "Returned".equalsIgnoreCase(currentStatus)) {
+        if ("Voided".equalsIgnoreCase(currentStatus) || "Returned".equalsIgnoreCase(currentStatus)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Sale " + sale.getReceiptNo() + " is already " + currentStatus +
-                    " and cannot be returned.");
+                    "Sale " + sale.getReceiptNo() + " is already " + currentStatus + " and cannot be returned.");
         }
 
-        // ── 2. Restock inventory for every sold item ──────────────────────────
+        Map<Long, SaleItem> itemsById = new HashMap<>();
         for (SaleItem item : sale.getItems()) {
+            itemsById.put(item.getId(), item);
+        }
 
-            Optional<Inventory> inventoryOpt = (item.getProductId() != null
-                    ? inventoryRepository.findByProductId(item.getProductId())
-                    : inventoryRepository.findByProductProductName(item.getProductName()));
+        for (SaleReturnItemRequest returnItem : request.items()) {
+            SaleItem saleItem = itemsById.get(returnItem.saleItemId());
+            if (saleItem == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Sale item " + returnItem.saleItemId() + " does not belong to sale " + sale.getReceiptNo() + ".");
+            }
+
+            var remainingQty = remainingQty(saleItem);
+            if (returnItem.quantity().compareTo(remainingQty) > 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Return quantity for '" + saleItem.getProductName() + "' exceeds available returnable quantity. Available: "
+                                + remainingQty + ", requested: " + returnItem.quantity());
+            }
+
+            Optional<Inventory> inventoryOpt = (saleItem.getProductId() != null
+                    ? inventoryRepository.findByProductId(saleItem.getProductId())
+                    : inventoryRepository.findByProductProductName(saleItem.getProductName()));
 
             if (inventoryOpt.isEmpty()) {
-                // If the inventory or product is completely gone, we skip restocking
-                // rather than failing the entire return process for the customer.
                 continue;
             }
 
             Inventory inventory = inventoryOpt.get();
-
-            double returnedQty  = item.getQuantity().doubleValue();
+            double returnedQty = returnItem.quantity().doubleValue();
             double restoredStock = inventory.getStockQuantity() + returnedQty;
             inventory.setStockQuantity(restoredStock);
             inventoryRepository.save(inventory);
 
-            // ── 3. Write audit log entry ──────────────────────────────────────
+            saleItem.setReturnedQuantity(getReturnedQty(saleItem).add(returnItem.quantity()));
+
             inventoryLogRepository.save(InventoryLog.builder()
                     .productId(inventory.getProduct().getId())
                     .productName(inventory.getProduct().getProductName())
                     .action("RESTOCK_RETURNED_SALE")
                     .quantityChanged(returnedQty)
                     .stockAfter(restoredStock)
-                    .notes("Restocked from returned sale ID: " + saleId)
+                    .notes("Restocked from returned sale ID: " + saleId + ", sale item ID: " + saleItem.getId())
                     .build());
         }
 
-        // ── 4. Mark sale as Returned ──────────────────────────────────────────
-        sale.setStatus("Returned");
+        boolean allReturned = sale.getItems().stream().allMatch(item -> remainingQty(item).signum() == 0);
+        boolean anyReturned = sale.getItems().stream().anyMatch(item -> getReturnedQty(item).signum() > 0);
+
+        if (allReturned) {
+            sale.setStatus("Returned");
+        } else if (anyReturned) {
+            sale.setStatus("Partially Returned");
+        }
+
         return saleRepository.save(sale);
+    }
+
+    private java.math.BigDecimal getReturnedQty(SaleItem item) {
+        return item.getReturnedQuantity() == null ? java.math.BigDecimal.ZERO : item.getReturnedQuantity();
+    }
+
+    private java.math.BigDecimal remainingQty(SaleItem item) {
+        var remainingQty = item.getQuantity().subtract(getReturnedQty(item));
+        return remainingQty.signum() < 0 ? java.math.BigDecimal.ZERO : remainingQty;
     }
 }
