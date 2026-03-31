@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -279,6 +281,8 @@ public class SaleService {
             itemsById.put(item.getId(), item);
         }
 
+        BigDecimal refundedAmount = BigDecimal.ZERO;
+
         for (SaleReturnItemRequest returnItem : request.items()) {
             SaleItem saleItem = itemsById.get(returnItem.saleItemId());
             if (saleItem == null) {
@@ -287,7 +291,18 @@ public class SaleService {
                         "Sale item " + returnItem.saleItemId() + " does not belong to sale " + sale.getReceiptNo() + ".");
             }
 
-                var remainingQty = remainingQty(saleItem);
+            var remainingQty = remainingQty(saleItem);
+            if (returnItem.quantity().compareTo(remainingQty) > 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Return quantity for '" + saleItem.getProductName() + "' exceeds available returnable quantity. Available: "
+                                + remainingQty + ", requested: " + returnItem.quantity());
+            }
+
+            BigDecimal lineRefund = returnItem.quantity().multiply(BigDecimal.valueOf(saleItem.getUnitPrice()));
+            refundedAmount = refundedAmount.add(lineRefund);
+
+            saleItem.setReturnedQuantity(getReturnedQty(saleItem).add(returnItem.quantity()));
 
             Optional<Inventory> inventoryOpt = (saleItem.getProductId() != null
                     ? inventoryRepository.findByProductId(saleItem.getProductId())
@@ -298,25 +313,16 @@ public class SaleService {
             }
 
             Inventory inventory = inventoryOpt.get();
-                if (isDiscreteUnit(inventory.getUnit()) && !isWholeNumber(returnItem.quantity())) {
+            if (isDiscreteUnit(inventory.getUnit()) && !isWholeNumber(returnItem.quantity())) {
                 throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Return quantity for '" + saleItem.getProductName() + "' must be a whole number for unit '" + safeUnit(inventory.getUnit()) + "'.");
-                }
+                        HttpStatus.BAD_REQUEST,
+                        "Return quantity for '" + saleItem.getProductName() + "' must be a whole number for unit '" + safeUnit(inventory.getUnit()) + "'.");
+            }
 
-                if (returnItem.quantity().compareTo(remainingQty) > 0) {
-                throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Return quantity for '" + saleItem.getProductName() + "' exceeds available returnable quantity. Available: "
-                        + remainingQty + ", requested: " + returnItem.quantity());
-                }
-
-                double returnedQty = returnItem.quantity().doubleValue();
+            double returnedQty = returnItem.quantity().doubleValue();
             double restoredStock = inventory.getStockQuantity() + returnedQty;
             inventory.setStockQuantity(restoredStock);
             inventoryRepository.save(inventory);
-
-                saleItem.setReturnedQuantity(getReturnedQty(saleItem).add(returnItem.quantity()));
 
             inventoryLogRepository.save(InventoryLog.builder()
                     .productId(inventory.getProduct().getId())
@@ -324,7 +330,7 @@ public class SaleService {
                     .action("RESTOCK_RETURNED_SALE")
                     .quantityChanged(returnedQty)
                     .stockAfter(restoredStock)
-                        .notes("Restocked from returned sale ID: " + saleId + ", sale item ID: " + saleItem.getId())
+                    .notes("Restocked from returned sale ID: " + saleId + ", sale item ID: " + saleItem.getId())
                     .build());
         }
 
@@ -333,8 +339,17 @@ public class SaleService {
 
         if (allReturned) {
             sale.setStatus("Returned");
+            sale.setTotalAmount(0.0);
         } else if (anyReturned) {
             sale.setStatus("Partially Returned");
+
+            Double currentTotalValue = sale.getTotalAmount();
+            BigDecimal currentTotal = BigDecimal.valueOf(currentTotalValue != null ? currentTotalValue : 0.0);
+            BigDecimal updatedTotal = currentTotal.subtract(refundedAmount);
+            if (updatedTotal.signum() < 0) {
+                updatedTotal = BigDecimal.ZERO;
+            }
+            sale.setTotalAmount(updatedTotal.setScale(2, RoundingMode.HALF_UP).doubleValue());
         }
 
         return saleRepository.save(sale);
