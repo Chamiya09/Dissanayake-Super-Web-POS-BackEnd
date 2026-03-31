@@ -38,8 +38,9 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class MailboxService {
 
-    private static final int MAX_PREVIEW_LEN = 160;
-    private static final int MAX_BODY_LEN = 12000;
+    private static final int MAX_PREVIEW_LEN = 180;
+    private static final int MAX_BODY_LEN = 2200;
+    private static final int MAX_STREAM_READ_BYTES = 4096;
     private static final String WEB_POS_HEADER = "X-Web-POS-System";
         private static final List<String> WEB_POS_SUBJECT_MARKERS = List.of(
             "purchase order",
@@ -152,7 +153,7 @@ public class MailboxService {
     private List<MailboxMessageDTO> readFolder(String folderName, String category, int limit) {
         validateMailConfig();
 
-        int safeLimit = Math.max(1, Math.min(limit, 100));
+        int safeLimit = Math.max(1, Math.min(limit, 40));
 
         try (Store store = buildImapStore()) {
             Folder folder = store.getFolder(folderName);
@@ -294,7 +295,7 @@ public class MailboxService {
 
         Object content = part.getContent();
         if (content instanceof InputStream stream) {
-            byte[] data = stream.readAllBytes();
+            byte[] data = stream.readNBytes(MAX_STREAM_READ_BYTES);
             return shorten(new String(data, StandardCharsets.UTF_8), MAX_BODY_LEN);
         }
 
