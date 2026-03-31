@@ -3,6 +3,7 @@ package com.dissayakesuper.web_pos_backend.sale.service;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -255,7 +256,7 @@ public class SaleService {
                     if (remainingQty.signum() <= 0) {
                         return null;
                     }
-                    return new SaleReturnItemRequest(item.getId(), remainingQty);
+                    return new SaleReturnItemRequest(item.getId(), remainingQty, null);
                 })
                 .filter(item -> item != null)
                 .toList();
@@ -287,13 +288,7 @@ public class SaleService {
                         "Sale item " + returnItem.saleItemId() + " does not belong to sale " + sale.getReceiptNo() + ".");
             }
 
-            var remainingQty = remainingQty(saleItem);
-            if (returnItem.quantity().compareTo(remainingQty) > 0) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Return quantity for '" + saleItem.getProductName() + "' exceeds available returnable quantity. Available: "
-                                + remainingQty + ", requested: " + returnItem.quantity());
-            }
+                var remainingQty = remainingQty(saleItem);
 
             Optional<Inventory> inventoryOpt = (saleItem.getProductId() != null
                     ? inventoryRepository.findByProductId(saleItem.getProductId())
@@ -304,12 +299,26 @@ public class SaleService {
             }
 
             Inventory inventory = inventoryOpt.get();
-            double returnedQty = returnItem.quantity().doubleValue();
+                var returnQtyInStockUnit = convertToInventoryUnit(
+                    returnItem.quantity(),
+                    returnItem.unit(),
+                    inventory.getUnit(),
+                    saleItem.getProductName());
+
+                if (returnQtyInStockUnit.compareTo(remainingQty) > 0) {
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Return quantity for '" + saleItem.getProductName() + "' exceeds available returnable quantity after unit conversion. Available: "
+                        + remainingQty + " " + safeUnit(inventory.getUnit()) + ", requested: "
+                        + returnItem.quantity() + " " + safeUnit(returnItem.unit()));
+                }
+
+                double returnedQty = returnQtyInStockUnit.doubleValue();
             double restoredStock = inventory.getStockQuantity() + returnedQty;
             inventory.setStockQuantity(restoredStock);
             inventoryRepository.save(inventory);
 
-            saleItem.setReturnedQuantity(getReturnedQty(saleItem).add(returnItem.quantity()));
+                saleItem.setReturnedQuantity(getReturnedQty(saleItem).add(returnQtyInStockUnit));
 
             inventoryLogRepository.save(InventoryLog.builder()
                     .productId(inventory.getProduct().getId())
@@ -317,7 +326,9 @@ public class SaleService {
                     .action("RESTOCK_RETURNED_SALE")
                     .quantityChanged(returnedQty)
                     .stockAfter(restoredStock)
-                    .notes("Restocked from returned sale ID: " + saleId + ", sale item ID: " + saleItem.getId())
+                        .notes("Restocked from returned sale ID: " + saleId + ", sale item ID: " + saleItem.getId() +
+                            ", input: " + returnItem.quantity() + " " + safeUnit(returnItem.unit()) +
+                            ", stock unit: " + safeUnit(inventory.getUnit()))
                     .build());
         }
 
@@ -340,5 +351,100 @@ public class SaleService {
     private java.math.BigDecimal remainingQty(SaleItem item) {
         var remainingQty = item.getQuantity().subtract(getReturnedQty(item));
         return remainingQty.signum() < 0 ? java.math.BigDecimal.ZERO : remainingQty;
+    }
+
+    private java.math.BigDecimal convertToInventoryUnit(
+            java.math.BigDecimal quantity,
+            String inputUnit,
+            String inventoryUnit,
+            String productName) {
+        String source = normalizeUnit(inputUnit);
+        String target = normalizeUnit(inventoryUnit);
+
+        if (source == null || source.isBlank()) {
+            return quantity;
+        }
+
+        if (target == null || target.isBlank()) {
+            if (!source.equals(target)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Cannot convert return unit for '" + productName + "' because inventory unit is not configured.");
+            }
+            return quantity;
+        }
+
+        if (source.equals(target)) {
+            return quantity;
+        }
+
+        if (isWeightUnit(source) && isWeightUnit(target)) {
+            var grams = toGrams(quantity, source);
+            return fromGrams(grams, target);
+        }
+
+        if (isVolumeUnit(source) && isVolumeUnit(target)) {
+            var milliliters = toMilliliters(quantity, source);
+            return fromMilliliters(milliliters, target);
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Incompatible return unit conversion for '" + productName + "'. Cannot convert " + inputUnit + " to " + inventoryUnit + ".");
+    }
+
+    private String normalizeUnit(String unit) {
+        if (unit == null) return null;
+        String normalized = unit.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isEmpty()) return null;
+
+        return switch (normalized) {
+            case "kg", "kilogram", "kilograms", "kilo", "kilos" -> "kg";
+            case "g", "gram", "grams" -> "g";
+            case "l", "lt", "liter", "liters", "litre", "litres" -> "l";
+            case "ml", "milliliter", "milliliters", "millilitre", "millilitres" -> "ml";
+            case "pcs", "pc", "piece", "pieces" -> "pcs";
+            default -> normalized;
+        };
+    }
+
+    private boolean isWeightUnit(String unit) {
+        return "kg".equals(unit) || "g".equals(unit);
+    }
+
+    private boolean isVolumeUnit(String unit) {
+        return "l".equals(unit) || "ml".equals(unit);
+    }
+
+    private java.math.BigDecimal toGrams(java.math.BigDecimal qty, String unit) {
+        if ("kg".equals(unit)) {
+            return qty.multiply(java.math.BigDecimal.valueOf(1000));
+        }
+        return qty;
+    }
+
+    private java.math.BigDecimal fromGrams(java.math.BigDecimal grams, String targetUnit) {
+        if ("kg".equals(targetUnit)) {
+            return grams.divide(java.math.BigDecimal.valueOf(1000), 3, java.math.RoundingMode.HALF_UP);
+        }
+        return grams;
+    }
+
+    private java.math.BigDecimal toMilliliters(java.math.BigDecimal qty, String unit) {
+        if ("l".equals(unit)) {
+            return qty.multiply(java.math.BigDecimal.valueOf(1000));
+        }
+        return qty;
+    }
+
+    private java.math.BigDecimal fromMilliliters(java.math.BigDecimal milliliters, String targetUnit) {
+        if ("l".equals(targetUnit)) {
+            return milliliters.divide(java.math.BigDecimal.valueOf(1000), 3, java.math.RoundingMode.HALF_UP);
+        }
+        return milliliters;
+    }
+
+    private String safeUnit(String unit) {
+        return unit == null || unit.isBlank() ? "(default)" : unit;
     }
 }
