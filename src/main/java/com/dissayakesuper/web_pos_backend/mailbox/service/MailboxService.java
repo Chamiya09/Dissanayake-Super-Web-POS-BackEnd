@@ -6,9 +6,11 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -226,6 +228,7 @@ public class MailboxService {
 
         boolean unread = "Inbox".equalsIgnoreCase(category) && !message.isSet(Flags.Flag.SEEN);
         boolean starred = message.isSet(Flags.Flag.FLAGGED);
+        List<String> tags = buildMessageTags(message, category, subject, unread, starred);
 
         return new MailboxMessageDTO(
                 message.getMessageNumber(),
@@ -238,8 +241,28 @@ public class MailboxService {
                 sentAt,
                 unread,
                 starred,
-                Collections.emptyList()
+                tags
         );
+    }
+
+    private List<String> buildMessageTags(Message message, String category, String subject, boolean unread, boolean starred)
+            throws Exception {
+        Set<String> tags = new LinkedHashSet<>();
+
+        tags.add("Inbox".equalsIgnoreCase(category) ? "Incoming" : "Outgoing");
+        tags.add(unread ? "Unread" : "Read");
+
+        if (starred) tags.add("Starred");
+        if (message.isSet(Flags.Flag.ANSWERED)) tags.add("Answered");
+        if (message.isSet(Flags.Flag.DRAFT)) tags.add("Draft");
+        if (message.isSet(Flags.Flag.RECENT)) tags.add("Recent");
+
+        String lowerSubject = sanitizeOrDefault(subject, "").toLowerCase(Locale.ENGLISH);
+        if (lowerSubject.contains("purchase order")) tags.add("Purchase Order");
+        if (lowerSubject.contains("updated")) tags.add("Updated");
+        if (lowerSubject.contains("admin")) tags.add("Admin");
+
+        return List.copyOf(tags);
     }
 
     private InternetAddress extractFrom(Message message) throws Exception {
