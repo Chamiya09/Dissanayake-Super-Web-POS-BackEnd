@@ -1,12 +1,13 @@
 package com.dissayakesuper.web_pos_backend.config;
 
-import com.dissayakesuper.web_pos_backend.user.entity.User;
-import com.dissayakesuper.web_pos_backend.user.repository.UserRepository;
+import java.time.LocalDateTime;
+
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import com.dissayakesuper.web_pos_backend.user.entity.User;
+import com.dissayakesuper.web_pos_backend.user.repository.UserRepository;
 
 /**
  * Seeds the very first Owner/Admin account when the users table is completely
@@ -36,7 +37,7 @@ public class DataInitializer implements CommandLineRunner {
         User admin = User.builder()
                 .username("admin")
                 .fullName("System Administrator")
-                .email("admin@dissanayake.lk")
+                .email("dissanayakasuperpothuhara@gmail.com")
                 .passwordHash(passwordEncoder.encode("admin123"))
                 .role("Owner")
                 .active(true)
