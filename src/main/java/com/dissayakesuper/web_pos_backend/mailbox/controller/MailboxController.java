@@ -1,9 +1,8 @@
 package com.dissayakesuper.web_pos_backend.mailbox.controller;
 
-import com.dissayakesuper.web_pos_backend.mailbox.dto.MailboxMessageDTO;
-import com.dissayakesuper.web_pos_backend.mailbox.dto.SendMailboxEmailRequestDTO;
-import com.dissayakesuper.web_pos_backend.mailbox.service.MailboxService;
-import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,8 +12,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-import java.util.Map;
+import com.dissayakesuper.web_pos_backend.mailbox.dto.MailboxMessageDTO;
+import com.dissayakesuper.web_pos_backend.mailbox.dto.SendMailboxEmailRequestDTO;
+import com.dissayakesuper.web_pos_backend.mailbox.service.MailboxService;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/mailbox")
@@ -29,16 +31,18 @@ public class MailboxController {
 
     @GetMapping("/inbox")
     public ResponseEntity<List<MailboxMessageDTO>> inbox(
-            @RequestParam(defaultValue = "20") int limit
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "false") boolean refresh
     ) {
-        return ResponseEntity.ok(mailboxService.listInbox(limit));
+        return ResponseEntity.ok(mailboxService.listInbox(limit, refresh));
     }
 
     @GetMapping("/sent")
     public ResponseEntity<List<MailboxMessageDTO>> sent(
-            @RequestParam(defaultValue = "20") int limit
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "false") boolean refresh
     ) {
-        return ResponseEntity.ok(mailboxService.listSent(limit));
+        return ResponseEntity.ok(mailboxService.listSent(limit, refresh));
     }
 
     @PostMapping("/send")

@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -65,6 +68,8 @@ public class MailboxService {
     private static final DateTimeFormatter DATE_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH);
 
+    private record CachedMessages(List<MailboxMessageDTO> messages, long createdAtEpochMs) {}
+
     private final JavaMailSender mailSender;
 
     @Value("${spring.mail.username}")
@@ -82,17 +87,34 @@ public class MailboxService {
     @Value("${app.mail.imap.port:993}")
     private int imapPort;
 
+    @Value("${app.mailbox.cache-ttl-ms:15000}")
+    private long mailboxCacheTtlMs;
+
+    private final ConcurrentMap<String, CachedMessages> mailboxCache = new ConcurrentHashMap<>();
+
     public MailboxService(JavaMailSender mailSender) {
         this.mailSender = mailSender;
     }
 
     public List<MailboxMessageDTO> listInbox(int limit) {
-        return readFolder("INBOX", "Inbox", limit);
+        return listInbox(limit, false);
+    }
+
+    public List<MailboxMessageDTO> listInbox(int limit, boolean refresh) {
+        int safeLimit = Math.max(1, Math.min(limit, 40));
+        String cacheKey = "inbox:" + safeLimit;
+        return getCachedOrLoad(cacheKey, refresh, () -> readFolder("INBOX", "Inbox", safeLimit));
     }
 
     public List<MailboxMessageDTO> listSent(int limit) {
+        return listSent(limit, false);
+    }
+
+    public List<MailboxMessageDTO> listSent(int limit, boolean refresh) {
+        int safeLimit = Math.max(1, Math.min(limit, 40));
+        String cacheKey = "sent:" + safeLimit;
         String[] sentCandidates = new String[]{"[Gmail]/Sent Mail", "[Gmail]/Sent", "Sent Mail", "Sent"};
-        return readFirstAvailableFolder(sentCandidates, "Sent", limit);
+        return getCachedOrLoad(cacheKey, refresh, () -> readFirstAvailableFolder(sentCandidates, "Sent", safeLimit));
     }
 
     public void send(SendMailboxEmailRequestDTO request) {
@@ -122,6 +144,7 @@ public class MailboxService {
 
                 helper.setText(html, true);
             mailSender.send(message);
+            invalidateMailboxCache();
         } catch (Exception ex) {
             log.error("[MailboxService] Failed to send Gmail message: {}", ex.getMessage(), ex);
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
@@ -383,5 +406,27 @@ public class MailboxService {
         // Accept all system mails by sender signature, while still preferring
         // known subject/body markers for stronger classification.
         return senderLooksPos && (subjectLooksPos || bodyLooksPos || fromEmail.equalsIgnoreCase(gmailUsername));
+    }
+
+    private List<MailboxMessageDTO> getCachedOrLoad(String cacheKey, boolean refresh, Supplier<List<MailboxMessageDTO>> loader) {
+        long ttlMs = Math.max(0L, mailboxCacheTtlMs);
+        long now = System.currentTimeMillis();
+
+        if (!refresh && ttlMs > 0) {
+            CachedMessages cached = mailboxCache.get(cacheKey);
+            if (cached != null && (now - cached.createdAtEpochMs()) <= ttlMs) {
+                return cached.messages();
+            }
+        }
+
+        List<MailboxMessageDTO> fresh = loader.get();
+        if (ttlMs > 0) {
+            mailboxCache.put(cacheKey, new CachedMessages(List.copyOf(fresh), now));
+        }
+        return fresh;
+    }
+
+    private void invalidateMailboxCache() {
+        mailboxCache.clear();
     }
 }
