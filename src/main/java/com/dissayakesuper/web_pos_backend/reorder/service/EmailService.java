@@ -162,49 +162,59 @@ public class EmailService {
             double totalAmount,
             String confirmedAt
     ) {
-      String subject = "Purchase Order Confirmed - " + orderRef;
+      String subject = "Supplier Confirmed Order: " + orderRef;
 
         String body = String.format("""
-                <div style="background:#ecfeff;border:1px solid #99f6e4;border-radius:10px;padding:14px;">
-                  <div style="font-size:12px;font-weight:700;color:#0f766e;letter-spacing:.02em;margin-bottom:6px;">Confirmation Received</div>
-                  <p style="margin:0;font-size:12px;color:#134e4a;line-height:1.6;">
+                <div style="border:1px solid #bbf7d0;background:#ecfdf3;border-radius:12px;padding:14px 16px;">
+                  <div style="font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#166534;margin-bottom:6px;">Confirmed</div>
+                  <div style="font-size:14px;font-weight:700;color:#14532d;line-height:1.4;">Supplier Confirmation Received</div>
+                  <p style="margin:8px 0 0;font-size:12px;color:#166534;line-height:1.6;">
                     Supplier has confirmed this purchase order via the secure acceptance link.
                   </p>
                 </div>
 
-                <table width="100%%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-collapse:collapse;">
+                <table width="100%%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-collapse:separate;border-spacing:0 10px;">
                   <tr>
-                    <td style="padding:8px 0;font-size:12px;color:#64748b;width:150px;">Order Reference</td>
-                    <td style="padding:8px 0;font-size:13px;font-weight:700;color:#0f172a;">%s</td>
+                    <td style="width:50%%;padding-right:8px;vertical-align:top;">
+                      <div style="border:1px solid #dbeafe;background:#eff6ff;border-radius:10px;padding:12px;">
+                        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#475569;">Order Reference</div>
+                        <div style="margin-top:6px;font-size:14px;font-weight:800;color:#0f172a;word-break:break-all;">%s</div>
+                      </div>
+                    </td>
+                    <td style="width:50%%;padding-left:8px;vertical-align:top;">
+                      <div style="border:1px solid #dbeafe;background:#eff6ff;border-radius:10px;padding:12px;">
+                        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#475569;">Order Total</div>
+                        <div style="margin-top:6px;font-size:14px;font-weight:800;color:#0f172a;">LKR %.2f</div>
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+                <table width="100%%" cellpadding="0" cellspacing="0" style="margin-top:2px;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+                  <tr>
+                    <td style="padding:10px 12px;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0;width:160px;background:#f8fafc;">Supplier Email</td>
+                    <td style="padding:10px 12px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;word-break:break-all;">%s</td>
                   </tr>
                   <tr>
-                    <td style="padding:8px 0;font-size:12px;color:#64748b;">Supplier Email</td>
-                    <td style="padding:8px 0;font-size:13px;color:#0f172a;">%s</td>
+                    <td style="padding:10px 12px;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0;background:#f8fafc;">Confirmed At</td>
+                    <td style="padding:10px 12px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;word-break:break-all;">%s</td>
                   </tr>
                   <tr>
-                    <td style="padding:8px 0;font-size:12px;color:#64748b;">Confirmed At</td>
-                    <td style="padding:8px 0;font-size:13px;color:#0f172a;">%s</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:8px 0;font-size:12px;color:#64748b;">Order Total</td>
-                    <td style="padding:8px 0;font-size:13px;font-weight:700;color:#0f172a;">LKR %.2f</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:8px 0;font-size:12px;color:#64748b;">Status</td>
-                    <td style="padding:8px 0;font-size:13px;font-weight:700;color:#1d4ed8;">CONFIRMED</td>
+                    <td style="padding:10px 12px;font-size:12px;color:#64748b;background:#f8fafc;">Status</td>
+                    <td style="padding:10px 12px;font-size:13px;font-weight:800;color:#15803d;">CONFIRMED</td>
                   </tr>
                 </table>
                 """,
                 escapeHtml(orderRef),
+                totalAmount,
                 escapeHtml(supplierEmail),
-                escapeHtml(confirmedAt),
-                totalAmount
+                escapeHtml(confirmedAt)
         );
 
         String html = EmailUiTemplate.wrapInCommonLayout(
                 subject,
                 "Confirmed",
-          "Purchase Order Confirmation Received",
+          "Supplier Confirmed Order",
                 "Reference: " + orderRef,
                 body,
                 "Internal confirmation notice from Dissanayake Super Inventory System."
