@@ -43,6 +43,8 @@ public class MailboxService {
     private static final int MAX_BODY_LEN = 2200;
     private static final int MAX_STREAM_READ_BYTES = 4096;
     private static final String WEB_POS_HEADER = "X-Web-POS-System";
+    private static final String WEB_POS_MAIL_TYPE_HEADER = "X-Web-POS-Mail-Type";
+    private static final String TYPE_MAILBOX_OUTGOING = "MAILBOX_OUTGOING";
         private static final List<String> WEB_POS_SUBJECT_MARKERS = List.of(
             "purchase order",
             "updated purchase order",
@@ -102,6 +104,7 @@ public class MailboxService {
             helper.setTo(request.to().trim());
             helper.setSubject(request.subject().trim());
                         message.setHeader(WEB_POS_HEADER, "true");
+                                                message.setHeader(WEB_POS_MAIL_TYPE_HEADER, TYPE_MAILBOX_OUTGOING);
                 String messageBodyHtml = String.format("""
                     <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;">
                       <p style="margin:0;font-size:13px;color:#334155;line-height:1.8;">%s</p>
