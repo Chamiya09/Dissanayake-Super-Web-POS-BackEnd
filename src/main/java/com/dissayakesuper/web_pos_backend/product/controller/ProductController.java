@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.dissayakesuper.web_pos_backend.product.dto.ProductBulkImportResponse;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.service.ProductService;
@@ -53,6 +54,16 @@ public class ProductController {
     public ResponseEntity<Product> create(@Valid @RequestBody ProductRequest request) {
         Product created = service.createProduct(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    // ── POST /api/products/bulk-import ───────────────────────────────────────
+    /** Imports multiple products (typically parsed from a CSV file). */
+    @PostMapping("/bulk-import")
+    public ResponseEntity<ProductBulkImportResponse> bulkImport(
+            @RequestBody List<ProductRequest> requests) {
+        ProductBulkImportResponse result = service.importProducts(requests);
+        HttpStatus status = result.failedCount() > 0 ? HttpStatus.MULTI_STATUS : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(result);
     }
 
     // ── PUT /api/products/{id} ────────────────────────────────────────────────
