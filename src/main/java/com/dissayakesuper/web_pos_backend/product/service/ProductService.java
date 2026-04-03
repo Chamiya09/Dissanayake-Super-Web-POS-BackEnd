@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.dissayakesuper.web_pos_backend.product.dto.ProductBulkImportResponse;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductImportError;
+import com.dissayakesuper.web_pos_backend.product.dto.ProductImportSuccess;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
@@ -91,77 +92,81 @@ public class ProductService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CSV import list is empty.");
         }
 
-        List<Product> importedProducts = new ArrayList<>();
+        List<ProductImportSuccess> importedProducts = new ArrayList<>();
         List<ProductImportError> errors = new ArrayList<>();
         Set<String> seenSkus = new HashSet<>();
 
         for (int i = 0; i < requests.size(); i++) {
             int rowNumber = i + 2; // row 1 is CSV header
             ProductRequest request = requests.get(i);
-
-            if (request == null) {
-                errors.add(new ProductImportError(rowNumber, null, "Row payload is missing."));
-                continue;
-            }
-
-            String productName = normalizeRequired(request.productName());
-            String sku = normalizeRequired(request.sku());
-            String category = normalizeRequired(request.category());
-            BigDecimal buyingPrice = request.buyingPrice();
-            BigDecimal sellingPrice = request.sellingPrice();
-            String unit = normalizeOptional(request.unit());
-            Double stockQuantity = request.stockQuantity();
-            Double reorderLevel = request.reorderLevel();
-
-            List<String> validationErrors = validateBulkValues(
-                    productName,
-                    sku,
-                    category,
-                    buyingPrice,
-                    sellingPrice,
-                    unit,
-                    stockQuantity,
-                    reorderLevel
-            );
-            if (!validationErrors.isEmpty()) {
-                errors.add(new ProductImportError(rowNumber, sku, String.join(" ", validationErrors)));
-                continue;
-            }
-
-            String skuKey = sku.toLowerCase(Locale.ROOT);
-            if (!seenSkus.add(skuKey)) {
-                errors.add(new ProductImportError(rowNumber, sku, "Duplicate SKU in CSV file."));
-                continue;
-            }
-
-            if (repository.existsBySku(sku)) {
-                errors.add(new ProductImportError(rowNumber, sku, "SKU already exists in the database."));
-                continue;
-            }
-
-            Product product = new Product(
-                    productName,
-                    sku,
-                    category,
-                    buyingPrice,
-                    sellingPrice,
-                    unit,
-                    stockQuantity,
-                    reorderLevel
-            );
+            String skuForError = null;
 
             try {
-                importedProducts.add(repository.saveAndFlush(product));
+                if (request == null) {
+                    errors.add(new ProductImportError(rowNumber, null, "Row payload is missing."));
+                    continue;
+                }
+
+                String productName = normalizeRequired(request.productName());
+                String sku = normalizeRequired(request.sku());
+                String category = normalizeRequired(request.category());
+                BigDecimal buyingPrice = request.buyingPrice();
+                BigDecimal sellingPrice = request.sellingPrice();
+                String unit = normalizeOptional(request.unit());
+                Double stockQuantity = request.stockQuantity();
+                Double reorderLevel = request.reorderLevel();
+
+                skuForError = sku;
+
+                List<String> validationErrors = validateBulkValues(
+                        productName,
+                        sku,
+                        category,
+                        buyingPrice,
+                        sellingPrice,
+                        unit,
+                        stockQuantity,
+                        reorderLevel
+                );
+                if (!validationErrors.isEmpty()) {
+                    errors.add(new ProductImportError(rowNumber, sku, String.join(" ", validationErrors)));
+                    continue;
+                }
+
+                String skuKey = sku.toLowerCase(Locale.ROOT);
+                if (!seenSkus.add(skuKey)) {
+                    errors.add(new ProductImportError(rowNumber, sku, "Duplicate SKU in CSV file."));
+                    continue;
+                }
+
+                if (repository.existsBySku(sku)) {
+                    errors.add(new ProductImportError(rowNumber, sku, "SKU already exists in the database."));
+                    continue;
+                }
+
+                Product product = new Product(
+                        productName,
+                        sku,
+                        category,
+                        buyingPrice,
+                        sellingPrice,
+                        unit,
+                        stockQuantity,
+                        reorderLevel
+                );
+
+                Product saved = repository.saveAndFlush(product);
+                importedProducts.add(toImportSuccess(saved));
             } catch (DataIntegrityViolationException ex) {
                 errors.add(new ProductImportError(
                         rowNumber,
-                        sku,
+                        skuForError,
                         "Could not import row because SKU or database constraints were violated."
                 ));
             } catch (Exception ex) {
                 errors.add(new ProductImportError(
                         rowNumber,
-                        sku,
+                        skuForError,
                         "Unexpected import error: " + safeMessage(ex.getMessage())
                 ));
             }
@@ -319,6 +324,20 @@ public class ProductService {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static ProductImportSuccess toImportSuccess(Product saved) {
+        return new ProductImportSuccess(
+                saved.getId(),
+                saved.getProductName(),
+                saved.getSku(),
+                saved.getCategory(),
+                saved.getBuyingPrice(),
+                saved.getSellingPrice(),
+                saved.getUnit(),
+                saved.getStockQuantity(),
+                saved.getReorderLevel()
+        );
     }
 
     private static String safeMessage(String message) {
