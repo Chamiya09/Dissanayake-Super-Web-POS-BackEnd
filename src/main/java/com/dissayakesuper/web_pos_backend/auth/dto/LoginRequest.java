@@ -11,9 +11,16 @@ import lombok.Setter;
 @Setter
 public class LoginRequest {
 
-    @NotBlank(message = "Username is required.")
+    private String loginId;
+
     private String username;
 
     @NotBlank(message = "Password is required.")
     private String password;
+
+    public String getLoginIdOrUsername() {
+        String value = loginId != null ? loginId.trim() : "";
+        if (!value.isBlank()) return value;
+        return username != null ? username.trim() : "";
+    }
 }
