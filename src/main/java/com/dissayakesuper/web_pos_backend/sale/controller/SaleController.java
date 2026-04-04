@@ -1,19 +1,29 @@
 package com.dissayakesuper.web_pos_backend.sale.controller;
 
-import com.dissayakesuper.web_pos_backend.sale.dto.StatusRequest;
-import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
-import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
-import com.dissayakesuper.web_pos_backend.sale.service.InvoicePdfService;
-import com.dissayakesuper.web_pos_backend.sale.service.SaleService;
-import jakarta.validation.Valid;
+import java.util.List;
+
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import com.dissayakesuper.web_pos_backend.sale.dto.SaleReturnRequest;
+import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
+import com.dissayakesuper.web_pos_backend.sale.dto.StatusRequest;
+import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
+import com.dissayakesuper.web_pos_backend.sale.service.InvoicePdfService;
+import com.dissayakesuper.web_pos_backend.sale.service.SaleService;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/sales")
@@ -93,5 +103,31 @@ public class SaleController {
             @Valid @RequestBody StatusRequest request) {
         Sale updated = saleService.updateSaleStatus(id, request.status());
         return ResponseEntity.ok(updated);
+    }
+
+    // ── POST /api/sales/{id}/return ───────────────────────────────────────────
+    /**
+     * Processes a sales return for a Completed sale.
+     * Restocks all sold items back into inventory and marks the sale as "Returned".
+     *
+     * @return 200 OK with the updated Sale, 404 if not found, 409 if already Voided/Returned.
+     */
+    @PostMapping("/{id}/return")
+    public ResponseEntity<Sale> returnSale(@PathVariable Long id) {
+        Sale returned = saleService.returnSale(id);
+        return ResponseEntity.ok(returned);
+    }
+
+    // ── POST /api/sales/{id}/return-items ─────────────────────────────────────
+    /**
+     * Processes an item-level return for a sale.
+     * Allows selecting specific sold items and return quantities.
+     */
+    @PostMapping("/{id}/return-items")
+    public ResponseEntity<Sale> returnSaleItems(
+            @PathVariable Long id,
+            @Valid @RequestBody SaleReturnRequest request) {
+        Sale returned = saleService.returnSelectedItems(id, request);
+        return ResponseEntity.ok(returned);
     }
 }

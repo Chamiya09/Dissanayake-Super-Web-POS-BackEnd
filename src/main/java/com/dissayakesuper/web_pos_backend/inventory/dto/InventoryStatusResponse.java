@@ -1,6 +1,7 @@
 package com.dissayakesuper.web_pos_backend.inventory.dto;
 
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
+import com.dissayakesuper.web_pos_backend.product.entity.Product;
 
 import java.time.LocalDateTime;
 
@@ -28,8 +29,9 @@ public record InventoryStatusResponse(
 ) {
     /** Convenience factory — builds from an Inventory entity. */
     public static InventoryStatusResponse from(Inventory inv) {
-        double qty     = inv.getStockQuantity();
-        double reorder = inv.getReorderLevel();
+                double qty     = inv.getStockQuantity() != null ? inv.getStockQuantity() : 0.0;
+                double reorder = inv.getReorderLevel() != null ? inv.getReorderLevel() : 0.0;
+                Product product = inv.getProduct();
 
         String status;
         if (qty <= 0)            status = "OUT_OF_STOCK";
@@ -38,15 +40,15 @@ public record InventoryStatusResponse(
 
         return new InventoryStatusResponse(
                 inv.getId(),
-                inv.getProduct().getId(),
-                inv.getProduct().getProductName(),
-                inv.getProduct().getSku(),
-                inv.getProduct().getCategory(),
-                inv.getProduct().getSellingPrice() != null
-                        ? inv.getProduct().getSellingPrice().doubleValue() : 0.0,
+                product != null ? product.getId() : null,
+                product != null ? product.getProductName() : "Unknown Product",
+                product != null ? product.getSku() : "N/A",
+                product != null ? product.getCategory() : "Uncategorized",
+                product != null && product.getSellingPrice() != null
+                        ? product.getSellingPrice().doubleValue() : 0.0,
                 qty,
                 reorder,
-                inv.getUnit(),
+                inv.getUnit() != null ? inv.getUnit() : "N/A",
                 status,
                 inv.getLastUpdated()
         );

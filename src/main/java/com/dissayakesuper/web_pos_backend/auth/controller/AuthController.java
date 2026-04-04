@@ -15,8 +15,8 @@ import org.springframework.web.server.ResponseStatusException;
  * Public authentication endpoint — no JWT required.
  *
  * POST /api/auth/login
- *   Body:   { "username": "admin", "password": "password" }
- *   200 OK: { "token": "<jwt>", "username": "admin", "name": "Admin User", "role": "Owner" }
+ *   Body:   { "loginId": "MGR001", "password": "password" }
+ *   200 OK: { "token": "<jwt>", "username": "manager1", "loginId": "MGR001", "name": "Manager User", "role": "Manager" }
  *   401:    Invalid credentials
  *   403:    Account deactivated
  */
@@ -41,11 +41,17 @@ public class AuthController {
 
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest req) {
+        String loginId = req.getLoginIdOrUsername();
+        if (loginId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Login ID is required.");
+        }
 
-        // 1. Look up the user
-        User user = userRepository.findByUsername(req.getUsername())
+        // 1. Look up by member ID first, then by username for backward compatibility (admin portal)
+        User user = userRepository.findByMemberIdIgnoreCase(loginId)
+            .or(() -> userRepository.findByUsernameIgnoreCase(loginId))
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED, "Invalid username or password."));
+                HttpStatus.UNAUTHORIZED, "Invalid login ID or password."));
 
         // 2. Check if account is active
         if (!user.isActive()) {
@@ -56,11 +62,12 @@ public class AuthController {
         // 3. Verify password
         if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
-                    "Invalid username or password.");
+                    "Invalid login ID or password.");
         }
 
-        // 4. Issue JWT; return token + login username + display name + role
+        // 4. Issue JWT; return token + login ID + display name + role
         String token = jwtUtils.generateToken(user.getUsername(), user.getRole());
-        return new AuthResponse(token, user.getUsername(), user.getFullName(), user.getRole());
+        String responseLoginId = user.getMemberId() != null ? user.getMemberId() : user.getUsername();
+        return new AuthResponse(token, user.getUsername(), responseLoginId, user.getFullName(), user.getRole());
     }
 }

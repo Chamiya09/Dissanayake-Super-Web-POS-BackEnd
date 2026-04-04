@@ -27,6 +27,12 @@ public class Reorder {
     @Column(name = "supplier_email", nullable = false, length = 255)
     private String supplierEmail;
 
+    @Column(name = "supplier_accept_token", length = 120, unique = true)
+    private String supplierAcceptToken;
+
+    @Column(name = "accepted_at")
+    private LocalDateTime acceptedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

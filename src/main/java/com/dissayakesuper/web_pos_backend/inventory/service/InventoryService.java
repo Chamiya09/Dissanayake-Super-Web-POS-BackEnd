@@ -1,14 +1,24 @@
 package com.dissayakesuper.web_pos_backend.inventory.service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryBulkImportResponse;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryAnalyticsDTO;
+import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryImportError;
+import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryImportRequest;
+import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryImportSuccess;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryStatusResponse;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
@@ -55,14 +65,20 @@ public class InventoryService {
         List<Inventory> all = inventoryRepository.findAll();
 
         long tracked    = all.size();
-        long lowStock   = all.stream().filter(i -> i.getStockQuantity() > 0
-                                                   && i.getStockQuantity() <= i.getReorderLevel()).count();
-        long outOfStock = all.stream().filter(i -> i.getStockQuantity() <= 0).count();
+        long lowStock   = all.stream().filter(i -> {
+                double qty = i.getStockQuantity() != null ? i.getStockQuantity() : 0.0;
+                double reorder = i.getReorderLevel() != null ? i.getReorderLevel() : 0.0;
+                return qty > 0 && qty <= reorder;
+            }).count();
+        long outOfStock = all.stream().filter(i -> {
+                double qty = i.getStockQuantity() != null ? i.getStockQuantity() : 0.0;
+                return qty <= 0;
+            }).count();
         double totalValue = all.stream()
                 .mapToDouble(i -> {
-                    double qty   = i.getStockQuantity();
-                    double price = i.getProduct().getSellingPrice() != null
-                            ? i.getProduct().getSellingPrice().doubleValue() : 0.0;
+                double qty   = i.getStockQuantity() != null ? i.getStockQuantity() : 0.0;
+                double price = i.getProduct() != null && i.getProduct().getSellingPrice() != null
+                    ? i.getProduct().getSellingPrice().doubleValue() : 0.0;
                     return qty * price;
                 })
                 .sum();
@@ -144,6 +160,116 @@ public class InventoryService {
                 .build());
 
         return saved;
+    }
+
+    // ── BULK IMPORT ──────────────────────────────────────────────────────────
+
+    /**
+     * Imports inventory stock and reorder values by SKU (typically from CSV rows).
+     * Each row is validated and processed independently so one invalid row does not
+     * block other valid rows.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public InventoryBulkImportResponse importInventory(List<InventoryImportRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CSV import list is empty.");
+        }
+
+        List<InventoryImportSuccess> importedItems = new ArrayList<>();
+        List<InventoryImportError> errors = new ArrayList<>();
+        Set<String> seenSkus = new HashSet<>();
+
+        for (int i = 0; i < requests.size(); i++) {
+            int rowNumber = i + 2; // row 1 is CSV header
+            InventoryImportRequest request = requests.get(i);
+            String skuForError = null;
+
+            try {
+                if (request == null) {
+                    errors.add(new InventoryImportError(rowNumber, null, "Row payload is missing."));
+                    continue;
+                }
+
+                String sku = normalizeRequired(request.sku());
+                Double stockQuantity = request.stockQuantity();
+                Double reorderLevel = request.reorderLevel();
+                String unit = normalizeOptional(request.unit());
+
+                skuForError = sku;
+
+                List<String> validationErrors = validateBulkValues(sku, stockQuantity, reorderLevel, unit);
+                if (!validationErrors.isEmpty()) {
+                    errors.add(new InventoryImportError(rowNumber, sku, String.join(" ", validationErrors)));
+                    continue;
+                }
+
+                String skuKey = sku.toLowerCase(Locale.ROOT);
+                if (!seenSkus.add(skuKey)) {
+                    errors.add(new InventoryImportError(rowNumber, sku, "Duplicate SKU in CSV file."));
+                    continue;
+                }
+
+                Product product = productRepository.findBySku(sku).orElse(null);
+                if (product == null) {
+                    errors.add(new InventoryImportError(rowNumber, sku, "SKU was not found in the database."));
+                    continue;
+                }
+
+                Inventory inventory = inventoryRepository.findByProductId(product.getId())
+                        .orElseGet(() -> Inventory.builder()
+                                .product(product)
+                                .stockQuantity(0.0)
+                                .reorderLevel(10.0)
+                                .unit(product.getUnit())
+                                .build());
+
+                double previousStock = inventory.getStockQuantity() != null
+                        ? inventory.getStockQuantity()
+                        : 0.0;
+
+                inventory.setStockQuantity(stockQuantity);
+                inventory.setReorderLevel(reorderLevel);
+                if (unit != null) {
+                    inventory.setUnit(unit);
+                }
+                inventory.setLastUpdated(LocalDateTime.now());
+
+                Inventory saved = inventoryRepository.saveAndFlush(inventory);
+
+                if (Double.compare(previousStock, stockQuantity) != 0) {
+                    inventoryLogRepository.save(InventoryLog.builder()
+                            .productId(product.getId())
+                            .productName(product.getProductName())
+                            .action("CSV_IMPORT")
+                            .quantityChanged(stockQuantity - previousStock)
+                            .stockAfter(stockQuantity)
+                            .notes("Imported from CSV")
+                            .build());
+                }
+
+                importedItems.add(toImportSuccess(saved));
+            } catch (DataIntegrityViolationException ex) {
+                errors.add(new InventoryImportError(
+                        rowNumber,
+                        skuForError,
+                        "Could not import row because database constraints were violated."
+                ));
+            } catch (Exception ex) {
+                errors.add(new InventoryImportError(
+                        rowNumber,
+                        skuForError,
+                        "Unexpected import error: " + safeMessage(ex.getMessage())
+                ));
+            }
+        }
+
+        return new InventoryBulkImportResponse(
+                requests.size(),
+                importedItems.size(),
+                errors.size(),
+                importedItems,
+                errors
+        );
     }
 
     // ── ADJUST STOCK (positive or negative) ───────────────────────────────────
@@ -286,5 +412,64 @@ public class InventoryService {
                 .reorderLevel(10.0)
                 .unit(product.getUnit())
                 .build();
+    }
+
+    private List<String> validateBulkValues(
+            String sku,
+            Double stockQuantity,
+            Double reorderLevel,
+            String unit
+    ) {
+        List<String> errors = new ArrayList<>();
+
+        if (sku == null || sku.isEmpty()) {
+            errors.add("SKU / ProductID is required.");
+        } else if (sku.length() > 100) {
+            errors.add("SKU must be 100 characters or fewer.");
+        }
+
+        if (stockQuantity == null) {
+            errors.add("Stock quantity is required.");
+        } else if (stockQuantity < 0) {
+            errors.add("Stock quantity must be 0 or greater.");
+        }
+
+        if (reorderLevel == null) {
+            errors.add("Reorder level is required.");
+        } else if (reorderLevel < 0) {
+            errors.add("Reorder level must be 0 or greater.");
+        }
+
+        if (unit != null && unit.length() > 20) {
+            errors.add("Unit must be 20 characters or fewer.");
+        }
+
+        return errors;
+    }
+
+    private static String normalizeRequired(String value) {
+        return value == null ? null : value.trim();
+    }
+
+    private static String normalizeOptional(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static InventoryImportSuccess toImportSuccess(Inventory saved) {
+        return new InventoryImportSuccess(
+                saved.getId(),
+                saved.getProduct().getId(),
+                saved.getProduct().getProductName(),
+                saved.getProduct().getSku(),
+                saved.getStockQuantity(),
+                saved.getReorderLevel(),
+                saved.getUnit()
+        );
+    }
+
+    private static String safeMessage(String message) {
+        return message == null || message.isBlank() ? "No details available." : message;
     }
 }

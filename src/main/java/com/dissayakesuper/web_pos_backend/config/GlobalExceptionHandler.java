@@ -10,6 +10,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -37,6 +40,31 @@ public class GlobalExceptionHandler {
         String message = ex.getReason() != null ? ex.getReason() : ex.getMessage();
         return ResponseEntity.status(status).body(body(status, message));
     }
+
+    /* ── Missing endpoint/static resource (404) ───────────────────────────── */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoResource(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(body(404, "Endpoint not found: " + ex.getResourcePath()));
+    }
+
+        /* ── Invalid JSON body (400) ─────────────────────────────────────────── */
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        public ResponseEntity<Map<String, Object>> handleUnreadableBody(HttpMessageNotReadableException ex) {
+        String msg = ex.getMostSpecificCause() != null
+            ? ex.getMostSpecificCause().getMessage()
+            : ex.getMessage();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(body(400, "Invalid request body: " + msg));
+        }
+
+        /* ── Method not allowed (405) ─────────────────────────────────────────── */
+        @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+        public ResponseEntity<Map<String, Object>> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
+        String message = ex.getMessage() != null ? ex.getMessage() : "HTTP method not allowed.";
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+            .body(body(405, message));
+        }
 
     /* ── Catch-all (500) ────────────────────────────────────────────────────── */
     @ExceptionHandler(Exception.class)

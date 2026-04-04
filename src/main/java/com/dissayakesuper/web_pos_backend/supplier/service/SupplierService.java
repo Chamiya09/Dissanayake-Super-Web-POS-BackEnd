@@ -1,12 +1,15 @@
 package com.dissayakesuper.web_pos_backend.supplier.service;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 import com.dissayakesuper.web_pos_backend.supplier.dto.SupplierRequest;
@@ -17,12 +20,19 @@ import com.dissayakesuper.web_pos_backend.supplier.repository.SupplierRepository
 @Transactional
 public class SupplierService {
 
+    private static final double ZERO_TOLERANCE = 0.000001d;
+
     private final SupplierRepository repository;
     private final ProductRepository productRepository;
+    private final InventoryRepository inventoryRepository;
 
-    public SupplierService(SupplierRepository repository, ProductRepository productRepository) {
+    public SupplierService(
+            SupplierRepository repository,
+            ProductRepository productRepository,
+            InventoryRepository inventoryRepository) {
         this.repository = repository;
         this.productRepository = productRepository;
+        this.inventoryRepository = inventoryRepository;
     }
 
     // ── READ ALL ──────────────────────────────────────────────────────────────
@@ -90,12 +100,28 @@ public class SupplierService {
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     public void deleteSupplier(Long id) {
-        if (!repository.existsById(id)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Supplier not found with id: " + id);
+        Supplier supplier = getSupplierById(id);
+
+        List<Product> assignedProducts = productRepository.findBySupplierId(id);
+        if (!assignedProducts.isEmpty()) {
+            List<String> nonZeroStockProducts = assignedProducts.stream()
+                    .filter(product -> currentInventoryQty(product) > ZERO_TOLERANCE)
+                    .map(product -> product.getProductName() + " (stock: " + formatQty(currentInventoryQty(product)) + ")")
+                    .collect(Collectors.toList());
+
+            if (!nonZeroStockProducts.isEmpty()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Supplier '" + supplier.getCompanyName() + "' cannot be deleted. All assigned product inventory must be 0 first. "
+                                + "Products with remaining stock: " + String.join(", ", nonZeroStockProducts));
+            }
+
+            // Business rule: when supplier is removed and all assigned product stock is zero,
+            // delete those assigned products automatically.
+            productRepository.deleteAll(assignedProducts);
         }
-        repository.deleteById(id);
+
+        repository.delete(supplier);
     }
 
     // ── ASSIGN PRODUCTS ───────────────────────────────────────────────────────
@@ -110,5 +136,22 @@ public class SupplierService {
         }
         products.forEach(p -> p.setSupplier(supplier));
         productRepository.saveAll(products);
+    }
+
+    private double currentInventoryQty(Product product) {
+        return inventoryRepository.findByProductId(product.getId())
+                .map(inv -> {
+                    Double stockQty = inv.getStockQuantity();
+                    return stockQty != null ? stockQty : 0.0;
+                })
+                // Source of truth is inventory table. If no inventory row exists, treat as zero.
+                .orElse(0.0);
+    }
+
+    private String formatQty(double qty) {
+        if (Math.abs(qty - Math.rint(qty)) < ZERO_TOLERANCE) {
+            return String.format(Locale.ENGLISH, "%.0f", qty);
+        }
+        return String.format(Locale.ENGLISH, "%.3f", qty);
     }
 }

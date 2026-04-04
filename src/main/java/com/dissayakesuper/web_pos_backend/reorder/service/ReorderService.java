@@ -21,6 +21,9 @@ import com.dissayakesuper.web_pos_backend.reorder.entity.Status;
 import com.dissayakesuper.web_pos_backend.reorder.repository.ReorderRepository;
 import com.dissayakesuper.web_pos_backend.supplier.repository.SupplierRepository;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 @Service
 @Transactional
 public class ReorderService {
@@ -60,6 +63,7 @@ public class ReorderService {
         Reorder reorder = Reorder.builder()
                 .orderRef(dto.orderRef())
                 .supplierEmail(dto.supplierEmail())
+            .supplierAcceptToken(newAcceptToken())
                 .status(Status.PENDING)
                 .totalAmount(0.0)   // updated below after items are added
                 .build();
@@ -94,7 +98,9 @@ public class ReorderService {
                 saved.getOrderRef(),
                 dto.items(),
                 saved.getTotalAmount(),
-                managerName
+            managerName,
+            saved.getSupplierAcceptToken(),
+            false
         );
         emailService.sendAdminNotification(
                 saved.getOrderRef(),
@@ -122,14 +128,16 @@ public class ReorderService {
      * @throws ResponseStatusException 404 if order not found
      * @throws ResponseStatusException 409 if order is in a terminal state
      */
-    public ReorderResponseDTO updateOrder(Long id, ReorderUpdateDTO dto) {
+    public ReorderResponseDTO updateOrder(Long id, ReorderUpdateDTO dto, String managerName) {
         Reorder reorder = findOrThrow(id);
 
-        if (reorder.getStatus() == Status.CANCELLED || reorder.getStatus() == Status.RECEIVED) {
+        if (reorder.getStatus() == Status.CANCELLED
+            || reorder.getStatus() == Status.RECEIVED
+            || reorder.getStatus() == Status.CONFIRMED) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Order '" + reorder.getOrderRef() + "' is " + reorder.getStatus()
-                            + " and cannot be edited.");
+                    + " and cannot be edited or resent.");
         }
 
         // ── Update supplierEmail ──────────────────────────────────────────────
@@ -157,7 +165,75 @@ public class ReorderService {
             reorder.setTotalAmount(total);
         }
 
+        reorder.setSupplierAcceptToken(newAcceptToken());
+        reorder.setAcceptedAt(null);
+
         Reorder saved = reorderRepository.save(reorder);
+
+        String supplierName = supplierRepository.findByEmail(saved.getSupplierEmail())
+                .map(s -> s.getCompanyName())
+                .orElse(null);
+
+        List<ReorderItemRequestDTO> itemRequestDTOs = saved.getItems().stream()
+                .map(i -> new ReorderItemRequestDTO(
+                        i.getProductName(),
+                        i.getProductId(),
+                    i.getQuantity(),
+                        i.getUnitPrice()
+                ))
+                .toList();
+
+        emailService.sendSupplierPO(
+                saved.getSupplierEmail(),
+                supplierName,
+                saved.getOrderRef(),
+                itemRequestDTOs,
+                saved.getTotalAmount(),
+            managerName,
+                saved.getSupplierAcceptToken(),
+                true
+        );
+
+        return ReorderResponseDTO.from(saved);
+    }
+
+    public ReorderResponseDTO acceptOrderByToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing accept token.");
+        }
+
+        Reorder reorder = reorderRepository.findBySupplierAcceptToken(token)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Invalid or expired acceptance link."));
+
+        if (reorder.getStatus() == Status.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order is cancelled and cannot be accepted.");
+        }
+
+        if (reorder.getStatus() == Status.RECEIVED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order is already received.");
+        }
+
+        if (reorder.getStatus() == Status.CONFIRMED) {
+            return ReorderResponseDTO.from(reorder);
+        }
+
+        reorder.setStatus(Status.CONFIRMED);
+        reorder.setAcceptedAt(LocalDateTime.now());
+        reorder.setSupplierAcceptToken(null);
+        Reorder saved = reorderRepository.save(reorder);
+
+        String confirmedAt = saved.getAcceptedAt() != null
+            ? saved.getAcceptedAt().toString()
+            : LocalDateTime.now().toString();
+        emailService.sendSupplierConfirmationDoneMail(
+            saved.getOrderRef(),
+            saved.getSupplierEmail(),
+            saved.getTotalAmount(),
+            confirmedAt
+        );
+
         return ReorderResponseDTO.from(saved);
     }
 
@@ -258,6 +334,10 @@ public class ReorderService {
                         "Reorder not found with id: " + id));
     }
 
+    private String newAcceptToken() {
+        return UUID.randomUUID().toString();
+    }
+
     /**
      * Guards against illegal status transitions.
      *
@@ -268,7 +348,7 @@ public class ReorderService {
         // Terminal states — no further transitions allowed
         if (current == Status.CANCELLED || current == Status.RECEIVED) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    HttpStatus.UNPROCESSABLE_CONTENT,
                     "Order '" + orderRef + "' is already " + current
                             + " and cannot be transitioned to " + requested + ".");
         }
@@ -278,7 +358,7 @@ public class ReorderService {
                 && requested != Status.CONFIRMED
                 && requested != Status.CANCELLED) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    HttpStatus.UNPROCESSABLE_CONTENT,
                     "Order '" + orderRef + "' is PENDING; allowed transitions: CONFIRMED, CANCELLED.");
         }
 
@@ -287,7 +367,7 @@ public class ReorderService {
                 && requested != Status.RECEIVED
                 && requested != Status.CANCELLED) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    HttpStatus.UNPROCESSABLE_CONTENT,
                     "Order '" + orderRef + "' is CONFIRMED; allowed transitions: RECEIVED, CANCELLED.");
         }
     }

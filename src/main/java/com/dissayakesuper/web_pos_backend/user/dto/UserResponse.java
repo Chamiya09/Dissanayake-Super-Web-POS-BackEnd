@@ -6,6 +6,7 @@ public class UserResponse {
 
     private Long id;
     private String username;
+    private String memberId;
     private String fullName;
     private String email;
     private String role;
@@ -14,9 +15,10 @@ public class UserResponse {
 
     public UserResponse() {}
 
-    public UserResponse(Long id, String username, String fullName, String email, String role, boolean active) {
+    public UserResponse(Long id, String username, String memberId, String fullName, String email, String role, boolean active) {
         this.id = id;
         this.username = username;
+        this.memberId = memberId;
         this.fullName = fullName;
         this.email = email;
         this.role = role;
@@ -28,6 +30,9 @@ public class UserResponse {
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
+
+    public String getMemberId() { return memberId; }
+    public void setMemberId(String memberId) { this.memberId = memberId; }
 
     public String getFullName() { return fullName; }
     public void setFullName(String fullName) { this.fullName = fullName; }

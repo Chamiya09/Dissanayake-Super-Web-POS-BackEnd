@@ -1,7 +1,12 @@
 package com.dissayakesuper.web_pos_backend.sale.service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -13,6 +18,8 @@ import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepository;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleItemRequest;
+import com.dissayakesuper.web_pos_backend.sale.dto.SaleReturnItemRequest;
+import com.dissayakesuper.web_pos_backend.sale.dto.SaleReturnRequest;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.entity.SaleItem;
@@ -115,10 +122,12 @@ public class SaleService {
         // ── Load ──────────────────────────────────────────────────────────────
         Sale sale = getSaleById(saleId);
 
-        if ("Voided".equalsIgnoreCase(sale.getStatus())) {
+        if ("Voided".equalsIgnoreCase(sale.getStatus()) ||
+            "Returned".equalsIgnoreCase(sale.getStatus()) ||
+            "Partially Returned".equalsIgnoreCase(sale.getStatus())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Sale " + sale.getReceiptNo() + " is voided and cannot be edited.");
+                    "Sale " + sale.getReceiptNo() + " is " + sale.getStatus() + " and cannot be edited.");
         }
 
         // ── Step 1: Reverse old inventory deductions ──────────────────────────
@@ -213,13 +222,172 @@ public class SaleService {
     public Sale updateSaleStatus(Long id, String newStatus) {
         Sale sale = getSaleById(id);
 
-        if ("Voided".equalsIgnoreCase(sale.getStatus())) {
+        if ("Voided".equalsIgnoreCase(sale.getStatus()) ||
+                "Returned".equalsIgnoreCase(sale.getStatus())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Sale " + sale.getReceiptNo() + " is already voided and cannot be modified.");
+                    "Sale " + sale.getReceiptNo() + " is already " + sale.getStatus() + " and cannot be modified.");
         }
 
         sale.setStatus(newStatus);
         return saleRepository.save(sale);
+    }
+
+    // ── RETURN SALE (restock inventory) ──────────────────────────────────────
+
+    /**
+     * Processes a sales return:
+     * <ol>
+     *   <li>Validates the sale exists and its status is "Completed".</li>
+     *   <li>For every {@link SaleItem}, restores the sold quantity back to stock.</li>
+     *   <li>Writes a {@link InventoryLog} entry (action = RESTOCK_RETURNED_SALE) per item.</li>
+     *   <li>Marks the sale status as "Returned" and persists it.</li>
+     * </ol>
+     *
+     * @param saleId the ID of the sale to return
+     * @return the updated {@link Sale} with status "Returned"
+     * @throws ResponseStatusException 404 if sale not found, 409 if already Voided/Returned
+     */
+    @Transactional
+    public Sale returnSale(Long saleId) {
+        Sale sale = getSaleById(saleId);
+        List<SaleReturnItemRequest> fullReturnItems = sale.getItems().stream()
+                .map(item -> {
+                    var remainingQty = remainingQty(item);
+                    if (remainingQty.signum() <= 0) {
+                        return null;
+                    }
+                    return new SaleReturnItemRequest(item.getId(), remainingQty);
+                })
+                .filter(item -> item != null)
+                .toList();
+
+        return returnSelectedItems(saleId, new SaleReturnRequest(fullReturnItems));
+    }
+
+    @Transactional
+    public Sale returnSelectedItems(Long saleId, SaleReturnRequest request) {
+        Sale sale = getSaleById(saleId);
+
+        String currentStatus = sale.getStatus();
+        if ("Voided".equalsIgnoreCase(currentStatus) || "Returned".equalsIgnoreCase(currentStatus)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Sale " + sale.getReceiptNo() + " is already " + currentStatus + " and cannot be returned.");
+        }
+
+        Map<Long, SaleItem> itemsById = new HashMap<>();
+        for (SaleItem item : sale.getItems()) {
+            itemsById.put(item.getId(), item);
+        }
+
+        for (SaleReturnItemRequest returnItem : request.items()) {
+            SaleItem saleItem = itemsById.get(returnItem.saleItemId());
+            if (saleItem == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Sale item " + returnItem.saleItemId() + " does not belong to sale " + sale.getReceiptNo() + ".");
+            }
+
+            var remainingQty = remainingQty(saleItem);
+            if (returnItem.quantity().compareTo(remainingQty) > 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Return quantity for '" + saleItem.getProductName() + "' exceeds available returnable quantity. Available: "
+                                + remainingQty + ", requested: " + returnItem.quantity());
+            }
+
+            saleItem.setReturnedQuantity(getReturnedQty(saleItem).add(returnItem.quantity()));
+
+            Optional<Inventory> inventoryOpt = (saleItem.getProductId() != null
+                    ? inventoryRepository.findByProductId(saleItem.getProductId())
+                    : inventoryRepository.findByProductProductName(saleItem.getProductName()));
+
+            if (inventoryOpt.isEmpty()) {
+                continue;
+            }
+
+            Inventory inventory = inventoryOpt.get();
+            if (isDiscreteUnit(inventory.getUnit()) && !isWholeNumber(returnItem.quantity())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Return quantity for '" + saleItem.getProductName() + "' must be a whole number for unit '" + safeUnit(inventory.getUnit()) + "'.");
+            }
+
+            double returnedQty = returnItem.quantity().doubleValue();
+            double restoredStock = inventory.getStockQuantity() + returnedQty;
+            inventory.setStockQuantity(restoredStock);
+            inventoryRepository.save(inventory);
+
+            inventoryLogRepository.save(InventoryLog.builder()
+                    .productId(inventory.getProduct().getId())
+                    .productName(inventory.getProduct().getProductName())
+                    .action("RESTOCK_RETURNED_SALE")
+                    .quantityChanged(returnedQty)
+                    .stockAfter(restoredStock)
+                    .notes("Restocked from returned sale ID: " + saleId + ", sale item ID: " + saleItem.getId())
+                    .build());
+        }
+
+        boolean allReturned = sale.getItems().stream().allMatch(item -> remainingQty(item).signum() == 0);
+        boolean anyReturned = sale.getItems().stream().anyMatch(item -> getReturnedQty(item).signum() > 0);
+
+        BigDecimal recalculatedTotal = sale.getItems().stream()
+                .map(item -> remainingQty(item).multiply(BigDecimal.valueOf(item.getUnitPrice())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        if (recalculatedTotal.signum() < 0) {
+            recalculatedTotal = BigDecimal.ZERO;
+        }
+        sale.setTotalAmount(recalculatedTotal.doubleValue());
+
+        if (allReturned) {
+            sale.setStatus("Returned");
+            sale.setTotalAmount(0.0);
+        } else if (anyReturned) {
+            sale.setStatus("Partially Returned");
+        }
+
+        return saleRepository.save(sale);
+    }
+
+    private java.math.BigDecimal getReturnedQty(SaleItem item) {
+        return item.getReturnedQuantity() == null ? java.math.BigDecimal.ZERO : item.getReturnedQuantity();
+    }
+
+    private java.math.BigDecimal remainingQty(SaleItem item) {
+        var remainingQty = item.getQuantity().subtract(getReturnedQty(item));
+        return remainingQty.signum() < 0 ? java.math.BigDecimal.ZERO : remainingQty;
+    }
+
+    private String normalizeUnit(String unit) {
+        if (unit == null) return null;
+        String normalized = unit.trim().toLowerCase(java.util.Locale.ROOT);
+        if (normalized.isEmpty()) return null;
+
+        return switch (normalized) {
+            case "pcs", "pc", "piece", "pieces" -> "pcs";
+            case "packet", "packets", "pack", "packs" -> "packet";
+            default -> normalized;
+        };
+    }
+
+    private boolean isDiscreteUnit(String unit) {
+        String normalized = normalizeUnit(unit);
+        return "pcs".equals(normalized)
+                || "packet".equals(normalized)
+                || "bottle".equals(normalized)
+                || "box".equals(normalized)
+                || "item".equals(normalized)
+                || "unit".equals(normalized);
+    }
+
+    private boolean isWholeNumber(java.math.BigDecimal qty) {
+        return qty.stripTrailingZeros().scale() <= 0;
+    }
+
+    private String safeUnit(String unit) {
+        return unit == null || unit.isBlank() ? "(default)" : unit;
     }
 }

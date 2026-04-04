@@ -32,6 +32,9 @@ public class SaleItem {
     @Column(name = "quantity", nullable = false, precision = 10, scale = 3)
     private BigDecimal quantity;
 
+    @Column(name = "returned_quantity", nullable = false, precision = 10, scale = 3)
+    private BigDecimal returnedQuantity = BigDecimal.ZERO;
+
     @Column(name = "unit_price", nullable = false)
     private Double unitPrice;
 
@@ -67,6 +70,11 @@ public class SaleItem {
 
     public BigDecimal getQuantity() { return quantity; }
     public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
+
+    public BigDecimal getReturnedQuantity() { return returnedQuantity; }
+    public void setReturnedQuantity(BigDecimal returnedQuantity) {
+        this.returnedQuantity = returnedQuantity == null ? BigDecimal.ZERO : returnedQuantity;
+    }
 
     public Double getUnitPrice() { return unitPrice; }
     public void setUnitPrice(Double unitPrice) { this.unitPrice = unitPrice; }
