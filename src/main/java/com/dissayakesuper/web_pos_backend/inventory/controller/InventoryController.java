@@ -2,6 +2,7 @@ package com.dissayakesuper.web_pos_backend.inventory.controller;
 
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,7 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.dissayakesuper.web_pos_backend.inventory.dto.AddStockRequest;
 import com.dissayakesuper.web_pos_backend.inventory.dto.AdjustStockRequest;
 import com.dissayakesuper.web_pos_backend.inventory.dto.EditInventoryRequest;
+import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryBulkImportResponse;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryAnalyticsDTO;
+import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryImportRequest;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryStatusResponse;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
@@ -84,6 +87,18 @@ public class InventoryController {
     @GetMapping("/logs/{productId}")
     public ResponseEntity<List<InventoryLog>> getLogs(@PathVariable Long productId) {
         return ResponseEntity.ok(service.getLogsByProductId(productId));
+    }
+
+    // ── POST /api/inventory/bulk-import ──────────────────────────────────────
+    /**
+     * Imports stock quantity and reorder level values in bulk (typically from CSV rows).
+     */
+    @PostMapping("/bulk-import")
+    public ResponseEntity<InventoryBulkImportResponse> bulkImport(
+            @RequestBody List<InventoryImportRequest> requests) {
+        InventoryBulkImportResponse result = service.importInventory(requests);
+        HttpStatus status = result.failedCount() > 0 ? HttpStatus.MULTI_STATUS : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(result);
     }
 
     // ── PUT /api/inventory/add-stock/{productId} ──────────────────────────────
