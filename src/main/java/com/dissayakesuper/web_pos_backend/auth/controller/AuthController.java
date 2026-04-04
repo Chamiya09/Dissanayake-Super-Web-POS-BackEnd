@@ -47,9 +47,9 @@ public class AuthController {
                 "Login ID is required.");
         }
 
-        // 1. Look up by member ID first, then by username for backward compatibility
-        User user = userRepository.findByMemberId(loginId)
-            .or(() -> userRepository.findByUsername(loginId))
+        // 1. Look up by member ID first, then by username for backward compatibility (admin portal)
+        User user = userRepository.findByMemberIdIgnoreCase(loginId)
+            .or(() -> userRepository.findByUsernameIgnoreCase(loginId))
                 .orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.UNAUTHORIZED, "Invalid login ID or password."));
 
