@@ -1,6 +1,7 @@
 package com.dissayakesuper.web_pos_backend.sale.entity;
 
 import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -71,6 +72,12 @@ public class Sale {
 
     public String getReceiptNo() { return receiptNo; }
     public void setReceiptNo(String receiptNo) { this.receiptNo = receiptNo; }
+
+    @JsonProperty("transactionId")
+    public String getTransactionId() { return receiptNo; }
+
+    @JsonProperty("transactionId")
+    public void setTransactionId(String transactionId) { this.receiptNo = transactionId; }
 
     public LocalDateTime getSaleDate() { return saleDate; }
     public void setSaleDate(LocalDateTime saleDate) { this.saleDate = saleDate; }

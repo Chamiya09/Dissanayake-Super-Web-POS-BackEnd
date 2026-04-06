@@ -1,5 +1,7 @@
 package com.dissayakesuper.web_pos_backend.sale.service;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -7,6 +9,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -17,6 +23,8 @@ import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepository;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
+import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleItemRequest;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleReturnItemRequest;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleReturnRequest;
@@ -29,26 +37,46 @@ import com.dissayakesuper.web_pos_backend.sale.repository.SaleRepository;
 @Transactional
 public class SaleService {
 
+    private static final DateTimeFormatter EXPORT_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter EXPORT_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final List<String> ML_EXPORT_HEADERS = List.of(
+            "Date",
+            "Time",
+            "TransactionID",
+            "ProductID",
+            "ProductName",
+            "Category",
+            "PricingUnit",
+            "Quantity",
+            "UnitPrice",
+            "BuyingPrice",
+            "SellingPrice",
+            "Total_LKR"
+    );
+
     private final SaleRepository        saleRepository;
     private final InventoryRepository   inventoryRepository;
     private final InventoryLogRepository inventoryLogRepository;
+    private final ProductRepository productRepository;
+    private final TransactionIdService transactionIdService;
 
     public SaleService(SaleRepository saleRepository,
                        InventoryRepository inventoryRepository,
-                       InventoryLogRepository inventoryLogRepository) {
+                       InventoryLogRepository inventoryLogRepository,
+                       ProductRepository productRepository,
+                       TransactionIdService transactionIdService) {
         this.saleRepository       = saleRepository;
         this.inventoryRepository  = inventoryRepository;
         this.inventoryLogRepository = inventoryLogRepository;
+        this.productRepository = productRepository;
+        this.transactionIdService = transactionIdService;
     }
 
     // ── CREATE ────────────────────────────────────────────────────────────────
 
     public Sale createSale(Sale sale) {
-        if (saleRepository.existsByReceiptNo(sale.getReceiptNo())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "A sale with receipt number '" + sale.getReceiptNo() + "' already exists.");
-        }
+        // Transaction IDs are generated server-side to guarantee sequential continuity.
+        sale.setReceiptNo(transactionIdService.nextTransactionId());
 
         // ── Deduct stock for every item in this sale ──────────────────────────
         for (SaleItem item : sale.getItems()) {
@@ -93,6 +121,75 @@ public class SaleService {
     @Transactional(readOnly = true)
     public List<Sale> getAllSales() {
         return saleRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] exportSalesForMlCsv() {
+        List<Sale> sales = saleRepository.findAllByOrderBySaleDateAscIdAsc();
+
+        Set<Long> productIds = sales.stream()
+                .flatMap(sale -> sale.getItems().stream())
+                .map(SaleItem::getProductId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toSet());
+
+        Map<Long, Product> productsById = productIds.isEmpty()
+                ? Map.of()
+                : productRepository.findAllById(productIds).stream()
+                    .collect(Collectors.toMap(Product::getId, product -> product));
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.writeBytes((String.join(",", ML_EXPORT_HEADERS) + "\n").getBytes(StandardCharsets.UTF_8));
+
+        for (Sale sale : sales) {
+            if (sale.getSaleDate() == null || sale.getItems() == null || sale.getItems().isEmpty()) {
+                continue;
+            }
+
+            String date = sale.getSaleDate().format(EXPORT_DATE_FORMAT);
+            String time = sale.getSaleDate().format(EXPORT_TIME_FORMAT);
+            String transactionId = safe(sale.getReceiptNo());
+
+            for (SaleItem item : sale.getItems()) {
+                Product product = item.getProductId() == null ? null : productsById.get(item.getProductId());
+
+                String productId = product != null
+                        ? safe(product.getSku())
+                        : (item.getProductId() == null ? "" : String.valueOf(item.getProductId()));
+                String productName = product != null
+                        ? safe(product.getProductName())
+                        : safe(item.getProductName());
+                String category = product != null ? safe(product.getCategory()) : "";
+                String pricingUnit = product != null ? safe(product.getUnit()) : "unit";
+
+                String quantity = toQuantityString(item.getQuantity());
+
+                int unitPrice = toIntegerAmount(item.getUnitPrice());
+                int buyingPrice = product != null ? toIntegerAmount(product.getBuyingPrice()) : unitPrice;
+                int sellingPrice = product != null ? toIntegerAmount(product.getSellingPrice()) : unitPrice;
+                int totalLkr = toIntegerAmount(item.getLineTotal());
+
+                List<String> row = List.of(
+                        date,
+                        time,
+                        transactionId,
+                        productId,
+                        productName,
+                        category,
+                        pricingUnit,
+                        quantity,
+                        String.valueOf(unitPrice),
+                        String.valueOf(buyingPrice),
+                        String.valueOf(sellingPrice),
+                        String.valueOf(totalLkr)
+                );
+
+                out.writeBytes((row.stream().map(this::escapeCsv).collect(Collectors.joining(",")) + "\n")
+                        .getBytes(StandardCharsets.UTF_8));
+            }
+        }
+
+        return out.toByteArray();
     }
 
     // ── READ ONE ──────────────────────────────────────────────────────────────
@@ -389,5 +486,38 @@ public class SaleService {
 
     private String safeUnit(String unit) {
         return unit == null || unit.isBlank() ? "(default)" : unit;
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private int toIntegerAmount(Number value) {
+        if (value == null) {
+            return 0;
+        }
+        return (int) Math.round(value.doubleValue());
+    }
+
+    private int toIntegerAmount(BigDecimal value) {
+        if (value == null) {
+            return 0;
+        }
+        return value.setScale(0, RoundingMode.HALF_UP).intValue();
+    }
+
+    private String toQuantityString(BigDecimal quantity) {
+        if (quantity == null) {
+            return "0";
+        }
+        return quantity.stripTrailingZeros().toPlainString();
+    }
+
+    private String escapeCsv(String value) {
+        String normalized = value == null ? "" : value;
+        if (normalized.contains(",") || normalized.contains("\"") || normalized.contains("\n")) {
+            return "\"" + normalized.replace("\"", "\"\"") + "\"";
+        }
+        return normalized;
     }
 }

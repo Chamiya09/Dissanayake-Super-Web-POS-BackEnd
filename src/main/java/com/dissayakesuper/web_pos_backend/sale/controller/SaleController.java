@@ -19,9 +19,12 @@ import org.springframework.web.bind.annotation.RestController;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleReturnRequest;
 import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
 import com.dissayakesuper.web_pos_backend.sale.dto.StatusRequest;
+import com.dissayakesuper.web_pos_backend.sale.dto.TransactionSeedRequest;
+import com.dissayakesuper.web_pos_backend.sale.dto.TransactionSeedResponse;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.service.InvoicePdfService;
 import com.dissayakesuper.web_pos_backend.sale.service.SaleService;
+import com.dissayakesuper.web_pos_backend.sale.service.TransactionIdService;
 
 import jakarta.validation.Valid;
 
@@ -32,10 +35,14 @@ public class SaleController {
 
     private final SaleService       saleService;
     private final InvoicePdfService  invoicePdfService;
+    private final TransactionIdService transactionIdService;
 
-    public SaleController(SaleService saleService, InvoicePdfService invoicePdfService) {
+    public SaleController(SaleService saleService,
+                          InvoicePdfService invoicePdfService,
+                          TransactionIdService transactionIdService) {
         this.saleService      = saleService;
         this.invoicePdfService = invoicePdfService;
+        this.transactionIdService = transactionIdService;
     }
     // ── GET /api/sales/{id}/invoice ─────────────────────────────────────────
     /**
@@ -80,6 +87,19 @@ public class SaleController {
     public ResponseEntity<Sale> create(@Valid @RequestBody Sale sale) {
         Sale created = saleService.createSale(sale);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @PostMapping("/transaction-seed")
+    public ResponseEntity<TransactionSeedResponse> setTransactionSeed(
+            @Valid @RequestBody TransactionSeedRequest request) {
+        String appliedSeed = transactionIdService.setMigrationSeed(request.lastTransactionId());
+        String nextPreview = transactionIdService.peekNextTransactionId();
+        TransactionSeedResponse response = new TransactionSeedResponse(
+                appliedSeed,
+                nextPreview,
+                "Seed applied. TransactionID sequence is ready for migration continuity."
+        );
+        return ResponseEntity.ok(response);
     }
     // ── PUT /api/sales/{id} ────────────────────────────────────────────────────
     /**
