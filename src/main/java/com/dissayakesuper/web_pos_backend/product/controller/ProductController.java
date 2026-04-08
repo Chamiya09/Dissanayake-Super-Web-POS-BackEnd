@@ -54,7 +54,7 @@ public class ProductController {
 
     // ── GET /api/products/{id} ────────────────────────────────────────────────
     /** Returns a single product by id. 404 if not found. */
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     public ResponseEntity<Product> getById(@PathVariable Long id) {
         return ResponseEntity.ok(service.getProductById(id));
     }
@@ -79,7 +79,7 @@ public class ProductController {
 
     // ── PUT /api/products/{id} ────────────────────────────────────────────────
     /** Replaces all mutable fields of an existing product. 404 if not found. */
-    @PutMapping("/{id}")
+    @PutMapping("/{id:\\d+}")
     public ResponseEntity<Product> update(
             @PathVariable Long id,
             @Valid @RequestBody ProductRequest request) {
@@ -88,7 +88,7 @@ public class ProductController {
 
     // ── DELETE /api/products/{id} ─────────────────────────────────────────────
     /** Deletes a product by id. Returns 204 No Content. */
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         service.deleteProduct(id);
         return ResponseEntity.noContent().build();
@@ -124,7 +124,7 @@ public class ProductController {
 
     // ── PATCH /api/products/{id}/unassign ──────────────────────────────────────
     /** Removes the supplier association from a product. Returns the updated product. */
-    @PatchMapping("/{id}/unassign")
+    @PatchMapping("/{id:\\d+}/unassign")
     public ResponseEntity<Product> unassign(@PathVariable Long id) {
         return ResponseEntity.ok(service.unassignProduct(id));
     }
