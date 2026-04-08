@@ -35,7 +35,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public List<Product> getAllProducts() {
-        return repository.findAll();
+        return repository.findByIsActiveTrue();
     }
 
     // ── AVAILABLE FOR INVENTORY ────────────────────────────────────────────────
@@ -50,7 +50,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public Product getProductById(Long id) {
-        return repository.findById(id)
+        return repository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Product not found with id: " + id));
@@ -59,15 +59,17 @@ public class ProductService {
     // ── CREATE ────────────────────────────────────────────────────────────────
 
     public Product createProduct(ProductRequest request) {
-        if (repository.existsBySku(request.sku())) {
+        String barcode = normalizeOptional(request.sku());
+
+        if (barcode != null && repository.existsBySkuAndIsActiveTrue(barcode)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "A product with SKU '" + request.sku() + "' already exists.");
+                    "A product with barcode '" + barcode + "' already exists.");
         }
 
         Product product = new Product(
                 request.productName(),
-                request.sku(),
+                barcode,
                 request.category(),
                 request.buyingPrice(),
                 request.sellingPrice(),
@@ -139,7 +141,7 @@ public class ProductService {
                     continue;
                 }
 
-                if (repository.existsBySku(sku)) {
+                if (repository.existsBySkuAndIsActiveTrue(sku)) {
                     errors.add(new ProductImportError(rowNumber, sku, "SKU already exists in the database."));
                     continue;
                 }
@@ -185,18 +187,21 @@ public class ProductService {
 
     public Product updateProduct(Long id, ProductRequest request) {
         Product existing = getProductById(id);
+        String barcode = normalizeOptional(request.sku());
 
-        // Guard: reject if the new SKU is already taken by a *different* product
-        repository.findBySku(request.sku())
-                .filter(other -> !other.getId().equals(id))
-                .ifPresent(other -> {
-                    throw new ResponseStatusException(
-                            HttpStatus.CONFLICT,
-                            "SKU '" + request.sku() + "' is already used by another product.");
-                });
+        // Guard: reject if the new barcode is already taken by a *different* active product.
+        if (barcode != null) {
+            repository.findBySkuAndIsActiveTrue(barcode)
+                    .filter(other -> !other.getId().equals(id))
+                    .ifPresent(other -> {
+                        throw new ResponseStatusException(
+                                HttpStatus.CONFLICT,
+                                "Barcode '" + barcode + "' is already used by another product.");
+                    });
+        }
 
         existing.setProductName(request.productName());
-        existing.setSku(request.sku());
+        existing.setSku(barcode);
         existing.setCategory(request.category());
         existing.setBuyingPrice(request.buyingPrice());
         existing.setSellingPrice(request.sellingPrice());
@@ -212,40 +217,32 @@ public class ProductService {
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     public void deleteProduct(Long id) {
-        Product product = repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Product not found with id: " + id));
+        // Ensures 404 for unknown/inactive id before attempting update query.
+        getProductById(id);
 
-        // Explicitly remove supplier assignment before delete so all supplier views
-        // and queries observe this relationship cleanup in the same transaction.
-        if (product.getSupplierId() != null) {
-            product.setSupplier(null);
-            repository.save(product);
-        }
-
-        repository.delete(product);
+        // Soft-delete + barcode release in one write operation.
+        repository.softDeleteAndReleaseBarcode(id);
     }
 
     // ── GET UNASSIGNED ────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public List<Product> getUnassignedProducts() {
-        return repository.findBySupplierIsNull();
+        return repository.findBySupplierIsNullAndIsActiveTrue();
     }
 
     // ── GET BY SUPPLIER ─────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public List<Product> getProductsBySupplierId(Long supplierId) {
-        return repository.findBySupplierId(supplierId);
+        return repository.findBySupplierIdAndIsActiveTrue(supplierId);
     }
 
     // ── SEARCH BY SKU ─────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public Product getProductBySku(String sku) {
-        return repository.findBySku(sku)
+        return repository.findBySkuAndIsActiveTrue(sku)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "No product found with SKU: '" + sku + "'"));

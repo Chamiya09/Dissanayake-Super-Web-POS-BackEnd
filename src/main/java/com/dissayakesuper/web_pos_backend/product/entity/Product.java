@@ -36,9 +36,8 @@ public class Product {
     @Column(name = "product_name", nullable = false, length = 255)
     private String productName;
 
-    @NotBlank
     @Size(max = 100)
-    @Column(name = "sku", nullable = false, unique = true, length = 100)
+    @Column(name = "sku", unique = true, length = 100)
     private String sku;
 
     @NotBlank
@@ -80,6 +79,9 @@ public class Product {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "is_active", nullable = false)
+    private boolean isActive = true;
 
     // ── Constructors ──────────────────────────────────────────────────────────
 
@@ -147,4 +149,7 @@ public class Product {
     public void setSupplier(Supplier supplier) { this.supplier = supplier; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    public boolean isActive() { return isActive; }
+    public void setActive(boolean active) { isActive = active; }
 }
