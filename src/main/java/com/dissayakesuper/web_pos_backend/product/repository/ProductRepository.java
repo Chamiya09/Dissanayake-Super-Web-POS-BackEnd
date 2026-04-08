@@ -3,6 +3,8 @@ package com.dissayakesuper.web_pos_backend.product.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -33,6 +35,32 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /** Returns products that do not yet have an Inventory record. */
     @Query("SELECT p FROM Product p WHERE p.isActive = true AND p.id NOT IN (SELECT i.product.id FROM Inventory i)")
     List<Product> findProductsNotInInventory();
+
+        Page<Product> findByIsActiveTrue(Pageable pageable);
+
+        @Query(
+                        value = """
+                                        SELECT p
+                                        FROM Product p
+                                        WHERE p.isActive = true
+                                            AND (
+                                                        LOWER(p.productName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                                        OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                                        OR LOWER(p.category) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                                    )
+                                        """,
+                        countQuery = """
+                                        SELECT COUNT(p)
+                                        FROM Product p
+                                        WHERE p.isActive = true
+                                            AND (
+                                                        LOWER(p.productName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                                        OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                                        OR LOWER(p.category) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                                    )
+                                        """
+        )
+        Page<Product> searchActiveProducts(@Param("searchTerm") String searchTerm, Pageable pageable);
 
     @Modifying
     @Query("UPDATE Product p SET p.isActive = false, p.sku = null, p.supplier = null WHERE p.id = :id AND p.isActive = true")

@@ -8,6 +8,10 @@ import java.util.Locale;
 import java.util.Set;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -17,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductBulkImportResponse;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductImportError;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductImportSuccess;
+import com.dissayakesuper.web_pos_backend.product.dto.ProductPageResponse;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
@@ -36,6 +41,28 @@ public class ProductService {
     @Transactional(readOnly = true)
     public List<Product> getAllProducts() {
         return repository.findByIsActiveTrue();
+    }
+
+    @Transactional(readOnly = true)
+    public ProductPageResponse getProductsPage(int page, int limit, String search) {
+        int safePage = Math.max(page, 0);
+        int safeLimit = Math.max(1, Math.min(limit, 200));
+        String searchTerm = normalizeOptional(search);
+
+        Pageable pageable = PageRequest.of(safePage, safeLimit, Sort.by(Sort.Direction.ASC, "id"));
+        Page<Product> result = (searchTerm == null)
+            ? repository.findByIsActiveTrue(pageable)
+            : repository.searchActiveProducts(searchTerm, pageable);
+
+        return new ProductPageResponse(
+                result.getContent(),
+                result.getTotalElements(),
+                result.getTotalPages(),
+                result.getNumber(),
+                result.getSize(),
+                result.hasNext(),
+                result.hasPrevious()
+        );
     }
 
     // ── AVAILABLE FOR INVENTORY ────────────────────────────────────────────────

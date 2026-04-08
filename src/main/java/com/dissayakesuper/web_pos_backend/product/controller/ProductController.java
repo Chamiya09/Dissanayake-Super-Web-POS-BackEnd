@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.dissayakesuper.web_pos_backend.product.dto.ProductBulkImportResponse;
+import com.dissayakesuper.web_pos_backend.product.dto.ProductPageResponse;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.service.ProductService;
@@ -39,6 +40,16 @@ public class ProductController {
     @GetMapping
     public ResponseEntity<List<Product>> getAll() {
         return ResponseEntity.ok(service.getAllProducts());
+    }
+
+    // ── GET /api/products/page?page=0&limit=50&search=milk ─────────────────
+    /** Returns active products in pages for large catalogs. */
+    @GetMapping("/page")
+    public ResponseEntity<ProductPageResponse> getPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(service.getProductsPage(page, limit, search));
     }
 
     // ── GET /api/products/{id} ────────────────────────────────────────────────
