@@ -1,6 +1,8 @@
 package com.dissayakesuper.web_pos_backend.product.controller;
 
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.dissayakesuper.web_pos_backend.product.dto.ProductBulkImportResponse;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductPageResponse;
@@ -28,6 +31,8 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/products")
 @CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
 public class ProductController {
+
+    private static final Logger log = LoggerFactory.getLogger(ProductController.class);
 
     private final ProductService service;
 
@@ -49,7 +54,23 @@ public class ProductController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(required = false) String search) {
-        return ResponseEntity.ok(service.getProductsPage(page, limit, search));
+        int safePage = Math.max(0, page);
+        int safeLimit = Math.max(1, Math.min(limit, 200));
+
+        try {
+            return ResponseEntity.ok(service.getProductsPage(safePage, safeLimit, search));
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error(
+                    "Failed to fetch products page. page={}, limit={}, search='{}'",
+                    safePage,
+                    safeLimit,
+                    search,
+                    ex
+            );
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to fetch paginated products.");
+        }
     }
 
     // ── GET /api/products/{id} ────────────────────────────────────────────────
