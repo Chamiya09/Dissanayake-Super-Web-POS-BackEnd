@@ -132,9 +132,16 @@ public class ProductService {
     // ── CREATE ────────────────────────────────────────────────────────────────
 
     public Product createProduct(ProductRequest request) {
-        String barcode = normalizeOptional(request.sku());
+        String sku = normalizeOptional(request.sku());
+        String barcode = normalizeOptional(request.barcode());
 
-        if (barcode != null && repository.existsBySkuAndIsActiveTrue(barcode)) {
+        if (sku != null && repository.existsBySkuAndIsActiveTrue(sku)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "A product with SKU '" + sku + "' already exists.");
+        }
+
+        if (barcode != null && repository.existsByBarcodeAndIsActiveTrue(barcode)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "A product with barcode '" + barcode + "' already exists.");
@@ -142,6 +149,7 @@ public class ProductService {
 
         Product product = new Product(
                 request.productName(),
+                sku,
                 barcode,
                 request.category(),
                 request.buyingPrice(),
@@ -222,6 +230,7 @@ public class ProductService {
                 Product product = new Product(
                         productName,
                         sku,
+                    null,
                         category,
                         buyingPrice,
                         sellingPrice,
@@ -260,11 +269,22 @@ public class ProductService {
 
     public Product updateProduct(Long id, ProductRequest request) {
         Product existing = getProductById(id);
-        String barcode = normalizeOptional(request.sku());
+        String sku = normalizeOptional(request.sku());
+        String barcode = normalizeOptional(request.barcode());
+
+        if (sku != null) {
+            repository.findBySkuAndIsActiveTrue(sku)
+                    .filter(other -> !other.getId().equals(id))
+                    .ifPresent(other -> {
+                        throw new ResponseStatusException(
+                                HttpStatus.CONFLICT,
+                                "SKU '" + sku + "' is already used by another product.");
+                    });
+        }
 
         // Guard: reject if the new barcode is already taken by a *different* active product.
         if (barcode != null) {
-            repository.findBySkuAndIsActiveTrue(barcode)
+            repository.findByBarcodeAndIsActiveTrue(barcode)
                     .filter(other -> !other.getId().equals(id))
                     .ifPresent(other -> {
                         throw new ResponseStatusException(
@@ -274,7 +294,8 @@ public class ProductService {
         }
 
         existing.setProductName(request.productName());
-        existing.setSku(barcode);
+        existing.setSku(sku);
+        existing.setBarcode(barcode);
         existing.setCategory(request.category());
         existing.setBuyingPrice(request.buyingPrice());
         existing.setSellingPrice(request.sellingPrice());

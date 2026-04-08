@@ -40,6 +40,10 @@ public class Product {
     @Column(name = "sku", unique = true, length = 100)
     private String sku;
 
+    @Size(max = 100)
+    @Column(name = "barcode", length = 100)
+    private String barcode;
+
     @NotBlank
     @Size(max = 100)
     @Column(name = "category", nullable = false, length = 100)
@@ -89,15 +93,17 @@ public class Product {
 
     public Product(String productName,
                    String sku,
+                   String barcode,
                    String category,
                    BigDecimal buyingPrice,
                    BigDecimal sellingPrice,
                    String unit) {
-        this(productName, sku, category, buyingPrice, sellingPrice, unit, 0.0, null);
+        this(productName, sku, barcode, category, buyingPrice, sellingPrice, unit, 0.0, null);
     }
 
     public Product(String productName,
                    String sku,
+                   String barcode,
                    String category,
                    BigDecimal buyingPrice,
                    BigDecimal sellingPrice,
@@ -106,6 +112,7 @@ public class Product {
                    Double reorderLevel) {
         this.productName   = productName;
         this.sku           = sku;
+        this.barcode       = barcode;
         this.category      = category;
         this.buyingPrice   = buyingPrice;
         this.sellingPrice  = sellingPrice;
@@ -123,6 +130,9 @@ public class Product {
 
     public String getSku() { return sku; }
     public void setSku(String sku) { this.sku = sku; }
+
+    public String getBarcode() { return barcode; }
+    public void setBarcode(String barcode) { this.barcode = barcode; }
 
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }

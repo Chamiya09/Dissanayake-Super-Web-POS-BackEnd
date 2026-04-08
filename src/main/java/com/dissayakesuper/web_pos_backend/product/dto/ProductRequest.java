@@ -21,6 +21,9 @@ public record ProductRequest(
         @Size(max = 100)
         String sku,
 
+        @Size(max = 100)
+        String barcode,
+
         @NotBlank(message = "Category is required.")
         @Size(max = 100)
         String category,

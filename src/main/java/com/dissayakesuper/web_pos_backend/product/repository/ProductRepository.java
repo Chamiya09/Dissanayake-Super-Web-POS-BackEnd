@@ -19,8 +19,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /** Check whether a product with the given SKU already exists. */
     boolean existsBySkuAndIsActiveTrue(String sku);
 
+    /** Check whether a product with the given barcode already exists. */
+    boolean existsByBarcodeAndIsActiveTrue(String barcode);
+
     /** Find a product by SKU (useful for duplicate-check on update). */
     Optional<Product> findBySkuAndIsActiveTrue(String sku);
+
+    Optional<Product> findByBarcodeAndIsActiveTrue(String barcode);
 
     Optional<Product> findByIdAndIsActiveTrue(Long id);
 
@@ -46,6 +51,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                             AND (
                                                         LOWER(p.productName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
                                                         OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                                        OR LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
                                                         OR LOWER(p.category) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
                                                     )
                                         """,
@@ -56,6 +62,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                             AND (
                                                         LOWER(p.productName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
                                                         OR LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                                        OR LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
                                                         OR LOWER(p.category) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
                                                     )
                                         """
@@ -63,6 +70,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         Page<Product> searchActiveProducts(@Param("searchTerm") String searchTerm, Pageable pageable);
 
     @Modifying
-    @Query("UPDATE Product p SET p.isActive = false, p.sku = null, p.supplier = null WHERE p.id = :id AND p.isActive = true")
+    @Query("UPDATE Product p SET p.isActive = false, p.barcode = null, p.supplier = null WHERE p.id = :id AND p.isActive = true")
     int softDeleteAndReleaseBarcode(@Param("id") Long id);
 }
