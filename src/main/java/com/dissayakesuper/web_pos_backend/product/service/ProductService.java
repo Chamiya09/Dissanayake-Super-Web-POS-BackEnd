@@ -2,10 +2,12 @@ package com.dissayakesuper.web_pos_backend.product.service;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -50,9 +52,16 @@ public class ProductService {
         String searchTerm = normalizeOptional(search);
 
         Pageable pageable = PageRequest.of(safePage, safeLimit, Sort.by(Sort.Direction.ASC, "id"));
-        Page<Product> result = (searchTerm == null)
-            ? repository.findByIsActiveTrue(pageable)
-            : repository.searchActiveProducts(searchTerm, pageable);
+        Page<Product> result;
+
+        try {
+            result = (searchTerm == null)
+                    ? repository.findByIsActiveTrue(pageable)
+                    : repository.searchActiveProducts(searchTerm, pageable);
+        } catch (RuntimeException ex) {
+            // Fallback prevents UI outages if database dialect/runtime rejects the JPQL.
+            return getProductsPageFallback(safePage, safeLimit, searchTerm);
+        }
 
         return new ProductPageResponse(
                 result.getContent(),
@@ -63,6 +72,43 @@ public class ProductService {
                 result.hasNext(),
                 result.hasPrevious()
         );
+    }
+
+    private ProductPageResponse getProductsPageFallback(int page, int limit, String searchTerm) {
+        List<Product> allActive = repository.findByIsActiveTrue();
+
+        List<Product> filtered = allActive.stream()
+                .filter(product -> matchesSearch(product, searchTerm))
+                .sorted(Comparator.comparing(Product::getId))
+                .collect(Collectors.toList());
+
+        int totalElements = filtered.size();
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / limit);
+
+        int safeStart = Math.min(page * limit, totalElements);
+        int safeEnd = Math.min(safeStart + limit, totalElements);
+        List<Product> content = filtered.subList(safeStart, safeEnd);
+
+        return new ProductPageResponse(
+                content,
+                totalElements,
+                totalPages,
+                page,
+                limit,
+                page + 1 < totalPages,
+                page > 0
+        );
+    }
+
+    private boolean matchesSearch(Product product, String searchTerm) {
+        if (searchTerm == null) return true;
+
+        String needle = searchTerm.toLowerCase(Locale.ROOT);
+        String name = product.getProductName() == null ? "" : product.getProductName().toLowerCase(Locale.ROOT);
+        String sku = product.getSku() == null ? "" : product.getSku().toLowerCase(Locale.ROOT);
+        String category = product.getCategory() == null ? "" : product.getCategory().toLowerCase(Locale.ROOT);
+
+        return name.contains(needle) || sku.contains(needle) || category.contains(needle);
     }
 
     // ── AVAILABLE FOR INVENTORY ────────────────────────────────────────────────
