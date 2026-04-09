@@ -32,14 +32,14 @@ public class UserController {
 
     // ── POST /api/users ───────────────────────────────────────────────────────
     @PostMapping
-    public ResponseEntity<UserResponse> createUser(@RequestBody CreateUserRequest request) {
+    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request));
     }
 
     // ── PUT /api/users/{id} ───────────────────────────────────────────────────
     @PutMapping("/{id}")
     public ResponseEntity<UserResponse> updateUser(@PathVariable Long id,
-                                                   @RequestBody UpdateUserRequest request) {
+                                                   @Valid @RequestBody UpdateUserRequest request) {
         return ResponseEntity.ok(service.update(id, request));
     }
 

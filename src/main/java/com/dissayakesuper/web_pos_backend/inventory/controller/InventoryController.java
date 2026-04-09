@@ -95,7 +95,7 @@ public class InventoryController {
      */
     @PostMapping("/bulk-import")
     public ResponseEntity<InventoryBulkImportResponse> bulkImport(
-            @RequestBody List<InventoryImportRequest> requests) {
+            @Valid @RequestBody List<@Valid InventoryImportRequest> requests) {
         InventoryBulkImportResponse result = service.importInventory(requests);
         HttpStatus status = result.failedCount() > 0 ? HttpStatus.MULTI_STATUS : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(result);

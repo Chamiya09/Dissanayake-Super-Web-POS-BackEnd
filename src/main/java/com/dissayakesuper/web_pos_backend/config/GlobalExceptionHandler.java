@@ -1,93 +1,82 @@
 package com.dissayakesuper.web_pos_backend.config;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
-
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-/**
- * Centralised error handler — guarantees every API error response contains
- * a human-readable {@code message} field, regardless of Spring Boot's
- * {@code server.error.include-message} setting.
- */
-@ControllerAdvice
+@RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /* ── Bean-validation failures (400) ─────────────────────────────────────── */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-                .collect(Collectors.joining("; "));
+                .findFirst()
+                .map(fe -> fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Invalid input.")
+                .orElse("Validation failed for request data.");
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body(400, message));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body(message));
     }
 
-    /* ── ResponseStatusException (any status code) ──────────────────────────── */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<Map<String, String>> handleConstraintViolation(ConstraintViolationException ex) {
+        String message = ex.getConstraintViolations().stream()
+                .findFirst()
+                .map(v -> v.getMessage())
+                .orElse("Invalid request parameter.");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body(message));
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Map<String, Object>> handleStatus(ResponseStatusException ex) {
-        int status = ex.getStatusCode().value();
+    public ResponseEntity<Map<String, String>> handleStatus(ResponseStatusException ex) {
         String message = ex.getReason() != null ? ex.getReason() : ex.getMessage();
-        return ResponseEntity.status(status).body(body(status, message));
+        return ResponseEntity.status(ex.getStatusCode()).body(body(message));
     }
 
-    /* ── Missing endpoint/static resource (404) ───────────────────────────── */
     @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleNoResource(NoResourceFoundException ex) {
+    public ResponseEntity<Map<String, String>> handleNoResource(NoResourceFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(body(404, "Endpoint not found: " + ex.getResourcePath()));
+                .body(body("Endpoint not found: " + ex.getResourcePath()));
     }
 
-    /* ── Invalid path/query type conversion (400) ──────────────────────────── */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+    public ResponseEntity<Map<String, String>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         String message = "Invalid value for '" + ex.getName() + "': " + ex.getValue();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(body(400, message));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body(message));
     }
 
-        /* ── Invalid JSON body (400) ─────────────────────────────────────────── */
-        @ExceptionHandler(HttpMessageNotReadableException.class)
-        public ResponseEntity<Map<String, Object>> handleUnreadableBody(HttpMessageNotReadableException ex) {
-        String msg = ex.getMostSpecificCause() != null
-            ? ex.getMostSpecificCause().getMessage()
-            : ex.getMessage();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-            .body(body(400, "Invalid request body: " + msg));
-        }
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> handleUnreadableBody(HttpMessageNotReadableException ex) {
+        Throwable rootCause = ex.getMostSpecificCause();
+        String msg = rootCause != null ? rootCause.getMessage() : ex.getMessage();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body("Invalid request body: " + msg));
+    }
 
-        /* ── Method not allowed (405) ─────────────────────────────────────────── */
-        @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-        public ResponseEntity<Map<String, Object>> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, String>> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
         String message = ex.getMessage() != null ? ex.getMessage() : "HTTP method not allowed.";
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
-            .body(body(405, message));
-        }
-
-    /* ── Catch-all (500) ────────────────────────────────────────────────────── */
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
-        ex.printStackTrace();                       // log full trace for debugging
-        String message = ex.getMessage() != null ? ex.getMessage() : "Unexpected server error";
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(body(500, message));
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(body(message));
     }
 
-    private static Map<String, Object> body(int status, String message) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", Instant.now().toString());
-        body.put("status", status);
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, String>> handleGeneric(Exception ex) {
+        String message = ex.getMessage() != null ? ex.getMessage() : "Unexpected server error.";
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body(message));
+    }
+
+    private static Map<String, String> body(String message) {
+        Map<String, String> body = new LinkedHashMap<>();
+        // Keep both keys for backward compatibility while exposing the required "error" key.
+        body.put("error", message);
         body.put("message", message);
         return body;
     }

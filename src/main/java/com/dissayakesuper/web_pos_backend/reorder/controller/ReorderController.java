@@ -1,7 +1,6 @@
 package com.dissayakesuper.web_pos_backend.reorder.controller;
 
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -23,6 +22,7 @@ import com.dissayakesuper.web_pos_backend.reorder.dto.LowStockItemDTO;
 import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderRequestDTO;
 import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderResponseDTO;
 import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderUpdateDTO;
+import com.dissayakesuper.web_pos_backend.reorder.dto.StatusUpdateRequest;
 import com.dissayakesuper.web_pos_backend.reorder.entity.Status;
 import com.dissayakesuper.web_pos_backend.reorder.service.ReorderService;
 
@@ -126,8 +126,8 @@ public class ReorderController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<ReorderResponseDTO> updateStatus(
             @PathVariable Long id,
-            @RequestBody Map<String, String> body) {
-        String statusStr = body.get("status");
+            @Valid @RequestBody StatusUpdateRequest body) {
+        String statusStr = body.status();
         if (statusStr == null || statusStr.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing 'status' field.");
         }

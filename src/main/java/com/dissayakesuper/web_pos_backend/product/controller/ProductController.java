@@ -92,7 +92,7 @@ public class ProductController {
     /** Imports multiple products (typically parsed from a CSV file). */
     @PostMapping("/bulk-import")
     public ResponseEntity<ProductBulkImportResponse> bulkImport(
-            @RequestBody List<ProductRequest> requests) {
+            @Valid @RequestBody List<@Valid ProductRequest> requests) {
         ProductBulkImportResponse result = service.importProducts(requests);
         HttpStatus status = result.failedCount() > 0 ? HttpStatus.MULTI_STATUS : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(result);
