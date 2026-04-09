@@ -1,12 +1,29 @@
 package com.dissayakesuper.web_pos_backend.sale.entity;
 
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-import jakarta.persistence.*;
-import org.hibernate.annotations.CreationTimestamp;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.hibernate.annotations.CreationTimestamp;
+
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "sales")
@@ -23,15 +40,23 @@ public class Sale {
     @Column(name = "sale_date", nullable = false, updatable = false)
     private LocalDateTime saleDate;
 
+    @NotBlank(message = "Payment method is required.")
+    @Size(max = 50, message = "Payment method must be 50 characters or fewer.")
     @Column(name = "payment_method", nullable = false, length = 50)
     private String paymentMethod;
 
+    @NotNull(message = "Total amount is required.")
+    @DecimalMin(value = "0.0", inclusive = true, message = "Total amount must be 0 or greater.")
     @Column(name = "total_amount", nullable = false)
     private Double totalAmount;
 
+    @NotBlank(message = "Sale status is required.")
+    @Size(max = 20, message = "Sale status must be 20 characters or fewer.")
     @Column(name = "status", nullable = false, length = 20)
     private String status;   // "Completed" | "Voided"
 
+    @NotEmpty(message = "Sale must include at least one item.")
+    @Valid
     @JsonManagedReference
     @OneToMany(
             mappedBy      = "sale",
@@ -71,6 +96,12 @@ public class Sale {
 
     public String getReceiptNo() { return receiptNo; }
     public void setReceiptNo(String receiptNo) { this.receiptNo = receiptNo; }
+
+    @JsonProperty("transactionId")
+    public String getTransactionId() { return receiptNo; }
+
+    @JsonProperty("transactionId")
+    public void setTransactionId(String transactionId) { this.receiptNo = transactionId; }
 
     public LocalDateTime getSaleDate() { return saleDate; }
     public void setSaleDate(LocalDateTime saleDate) { this.saleDate = saleDate; }

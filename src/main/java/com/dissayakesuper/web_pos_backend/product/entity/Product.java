@@ -36,10 +36,13 @@ public class Product {
     @Column(name = "product_name", nullable = false, length = 255)
     private String productName;
 
-    @NotBlank
     @Size(max = 100)
-    @Column(name = "sku", nullable = false, unique = true, length = 100)
+    @Column(name = "sku", unique = true, length = 100)
     private String sku;
+
+    @Size(max = 100)
+    @Column(name = "barcode", length = 100)
+    private String barcode;
 
     @NotBlank
     @Size(max = 100)
@@ -81,21 +84,26 @@ public class Product {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "is_active", nullable = false)
+    private boolean isActive = true;
+
     // ── Constructors ──────────────────────────────────────────────────────────
 
     protected Product() {}
 
     public Product(String productName,
                    String sku,
+                   String barcode,
                    String category,
                    BigDecimal buyingPrice,
                    BigDecimal sellingPrice,
                    String unit) {
-        this(productName, sku, category, buyingPrice, sellingPrice, unit, 0.0, null);
+        this(productName, sku, barcode, category, buyingPrice, sellingPrice, unit, 0.0, null);
     }
 
     public Product(String productName,
                    String sku,
+                   String barcode,
                    String category,
                    BigDecimal buyingPrice,
                    BigDecimal sellingPrice,
@@ -104,6 +112,7 @@ public class Product {
                    Double reorderLevel) {
         this.productName   = productName;
         this.sku           = sku;
+        this.barcode       = barcode;
         this.category      = category;
         this.buyingPrice   = buyingPrice;
         this.sellingPrice  = sellingPrice;
@@ -121,6 +130,9 @@ public class Product {
 
     public String getSku() { return sku; }
     public void setSku(String sku) { this.sku = sku; }
+
+    public String getBarcode() { return barcode; }
+    public void setBarcode(String barcode) { this.barcode = barcode; }
 
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
@@ -147,4 +159,7 @@ public class Product {
     public void setSupplier(Supplier supplier) { this.supplier = supplier; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    public boolean isActive() { return isActive; }
+    public void setActive(boolean active) { isActive = active; }
 }

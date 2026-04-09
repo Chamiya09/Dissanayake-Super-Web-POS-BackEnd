@@ -14,4 +14,10 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
 
     /** Fetch a sale by its human-readable receipt number. */
     Optional<Sale> findByReceiptNo(String receiptNo);
+
+    /** Fetch the lexicographically highest TRX id (safe because ids are zero-padded). */
+    Optional<Sale> findFirstByReceiptNoStartingWithOrderByReceiptNoDesc(String prefix);
+
+    /** Export helper ordered by sale date and id. */
+    java.util.List<Sale> findAllByOrderBySaleDateAscIdAsc();
 }

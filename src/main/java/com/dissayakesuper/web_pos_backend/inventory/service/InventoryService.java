@@ -209,7 +209,7 @@ public class InventoryService {
                     continue;
                 }
 
-                Product product = productRepository.findBySku(sku).orElse(null);
+                Product product = productRepository.findBySkuAndIsActiveTrue(sku).orElse(null);
                 if (product == null) {
                     errors.add(new InventoryImportError(rowNumber, sku, "SKU was not found in the database."));
                     continue;

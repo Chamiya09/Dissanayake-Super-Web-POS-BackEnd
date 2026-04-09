@@ -11,6 +11,7 @@ import lombok.Setter;
 @Setter
 public class LoginRequest {
 
+    @NotBlank(message = "Login ID is required.")
     private String loginId;
 
     private String username;

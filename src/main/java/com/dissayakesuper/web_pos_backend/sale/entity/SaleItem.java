@@ -13,6 +13,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "sale_items")
@@ -22,6 +26,8 @@ public class SaleItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank(message = "Product name is required.")
+    @Size(max = 255, message = "Product name must be 255 characters or fewer.")
     @Column(name = "product_name", nullable = false, length = 255)
     private String productName;
 
@@ -29,15 +35,21 @@ public class SaleItem {
     @Column(name = "product_id")
     private Long productId;
 
+    @NotNull(message = "Quantity is required.")
+    @DecimalMin(value = "0.001", message = "Quantity must be at least 0.001.")
     @Column(name = "quantity", nullable = false, precision = 10, scale = 3)
     private BigDecimal quantity;
 
     @Column(name = "returned_quantity", nullable = false, precision = 10, scale = 3)
     private BigDecimal returnedQuantity = BigDecimal.ZERO;
 
+    @NotNull(message = "Unit price is required.")
+    @DecimalMin(value = "0.0", inclusive = true, message = "Unit price must be 0 or greater.")
     @Column(name = "unit_price", nullable = false)
     private Double unitPrice;
 
+    @NotNull(message = "Line total is required.")
+    @DecimalMin(value = "0.0", inclusive = true, message = "Line total must be 0 or greater.")
     @Column(name = "line_total", nullable = false)
     private Double lineTotal;
 

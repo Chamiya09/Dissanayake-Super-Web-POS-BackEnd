@@ -2,12 +2,18 @@ package com.dissayakesuper.web_pos_backend.product.service;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -17,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductBulkImportResponse;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductImportError;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductImportSuccess;
+import com.dissayakesuper.web_pos_backend.product.dto.ProductPageResponse;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
@@ -35,7 +42,73 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public List<Product> getAllProducts() {
-        return repository.findAll();
+        return repository.findByIsActiveTrue();
+    }
+
+    @Transactional(readOnly = true)
+    public ProductPageResponse getProductsPage(int page, int limit, String search) {
+        int safePage = Math.max(page, 0);
+        int safeLimit = Math.max(1, Math.min(limit, 200));
+        String searchTerm = normalizeOptional(search);
+
+        Pageable pageable = PageRequest.of(safePage, safeLimit, Sort.by(Sort.Direction.ASC, "id"));
+        Page<Product> result;
+
+        try {
+            result = (searchTerm == null)
+                    ? repository.findByIsActiveTrue(pageable)
+                    : repository.searchActiveProducts(searchTerm, pageable);
+        } catch (RuntimeException ex) {
+            // Fallback prevents UI outages if database dialect/runtime rejects the JPQL.
+            return getProductsPageFallback(safePage, safeLimit, searchTerm);
+        }
+
+        return new ProductPageResponse(
+                result.getContent(),
+                result.getTotalElements(),
+                result.getTotalPages(),
+                result.getNumber(),
+                result.getSize(),
+                result.hasNext(),
+                result.hasPrevious()
+        );
+    }
+
+    private ProductPageResponse getProductsPageFallback(int page, int limit, String searchTerm) {
+        List<Product> allActive = repository.findByIsActiveTrue();
+
+        List<Product> filtered = allActive.stream()
+                .filter(product -> matchesSearch(product, searchTerm))
+                .sorted(Comparator.comparing(Product::getId))
+                .collect(Collectors.toList());
+
+        int totalElements = filtered.size();
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / limit);
+
+        int safeStart = Math.min(page * limit, totalElements);
+        int safeEnd = Math.min(safeStart + limit, totalElements);
+        List<Product> content = filtered.subList(safeStart, safeEnd);
+
+        return new ProductPageResponse(
+                content,
+                totalElements,
+                totalPages,
+                page,
+                limit,
+                page + 1 < totalPages,
+                page > 0
+        );
+    }
+
+    private boolean matchesSearch(Product product, String searchTerm) {
+        if (searchTerm == null) return true;
+
+        String needle = searchTerm.toLowerCase(Locale.ROOT);
+        String name = product.getProductName() == null ? "" : product.getProductName().toLowerCase(Locale.ROOT);
+        String sku = product.getSku() == null ? "" : product.getSku().toLowerCase(Locale.ROOT);
+        String category = product.getCategory() == null ? "" : product.getCategory().toLowerCase(Locale.ROOT);
+
+        return name.contains(needle) || sku.contains(needle) || category.contains(needle);
     }
 
     // ── AVAILABLE FOR INVENTORY ────────────────────────────────────────────────
@@ -50,7 +123,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public Product getProductById(Long id) {
-        return repository.findById(id)
+        return repository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Product not found with id: " + id));
@@ -59,15 +132,25 @@ public class ProductService {
     // ── CREATE ────────────────────────────────────────────────────────────────
 
     public Product createProduct(ProductRequest request) {
-        if (repository.existsBySku(request.sku())) {
+        String sku = normalizeOptional(request.sku());
+        String barcode = normalizeOptional(request.barcode());
+
+        if (sku != null && repository.existsBySkuAndIsActiveTrue(sku)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "A product with SKU '" + request.sku() + "' already exists.");
+                    "A product with SKU '" + sku + "' already exists.");
+        }
+
+        if (barcode != null && repository.existsByBarcodeAndIsActiveTrue(barcode)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "A product with barcode '" + barcode + "' already exists.");
         }
 
         Product product = new Product(
                 request.productName(),
-                request.sku(),
+                sku,
+                barcode,
                 request.category(),
                 request.buyingPrice(),
                 request.sellingPrice(),
@@ -139,7 +222,7 @@ public class ProductService {
                     continue;
                 }
 
-                if (repository.existsBySku(sku)) {
+                if (repository.existsBySkuAndIsActiveTrue(sku)) {
                     errors.add(new ProductImportError(rowNumber, sku, "SKU already exists in the database."));
                     continue;
                 }
@@ -147,6 +230,7 @@ public class ProductService {
                 Product product = new Product(
                         productName,
                         sku,
+                    null,
                         category,
                         buyingPrice,
                         sellingPrice,
@@ -185,18 +269,33 @@ public class ProductService {
 
     public Product updateProduct(Long id, ProductRequest request) {
         Product existing = getProductById(id);
+        String sku = normalizeOptional(request.sku());
+        String barcode = normalizeOptional(request.barcode());
 
-        // Guard: reject if the new SKU is already taken by a *different* product
-        repository.findBySku(request.sku())
-                .filter(other -> !other.getId().equals(id))
-                .ifPresent(other -> {
-                    throw new ResponseStatusException(
-                            HttpStatus.CONFLICT,
-                            "SKU '" + request.sku() + "' is already used by another product.");
-                });
+        if (sku != null) {
+            repository.findBySkuAndIsActiveTrue(sku)
+                    .filter(other -> !other.getId().equals(id))
+                    .ifPresent(other -> {
+                        throw new ResponseStatusException(
+                                HttpStatus.CONFLICT,
+                                "SKU '" + sku + "' is already used by another product.");
+                    });
+        }
+
+        // Guard: reject if the new barcode is already taken by a *different* active product.
+        if (barcode != null) {
+            repository.findByBarcodeAndIsActiveTrue(barcode)
+                    .filter(other -> !other.getId().equals(id))
+                    .ifPresent(other -> {
+                        throw new ResponseStatusException(
+                                HttpStatus.CONFLICT,
+                                "Barcode '" + barcode + "' is already used by another product.");
+                    });
+        }
 
         existing.setProductName(request.productName());
-        existing.setSku(request.sku());
+        existing.setSku(sku);
+        existing.setBarcode(barcode);
         existing.setCategory(request.category());
         existing.setBuyingPrice(request.buyingPrice());
         existing.setSellingPrice(request.sellingPrice());
@@ -212,40 +311,32 @@ public class ProductService {
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     public void deleteProduct(Long id) {
-        Product product = repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Product not found with id: " + id));
+        // Ensures 404 for unknown/inactive id before attempting update query.
+        getProductById(id);
 
-        // Explicitly remove supplier assignment before delete so all supplier views
-        // and queries observe this relationship cleanup in the same transaction.
-        if (product.getSupplierId() != null) {
-            product.setSupplier(null);
-            repository.save(product);
-        }
-
-        repository.delete(product);
+        // Soft-delete + barcode release in one write operation.
+        repository.softDeleteAndReleaseBarcode(id);
     }
 
     // ── GET UNASSIGNED ────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public List<Product> getUnassignedProducts() {
-        return repository.findBySupplierIsNull();
+        return repository.findBySupplierIsNullAndIsActiveTrue();
     }
 
     // ── GET BY SUPPLIER ─────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public List<Product> getProductsBySupplierId(Long supplierId) {
-        return repository.findBySupplierId(supplierId);
+        return repository.findBySupplierIdAndIsActiveTrue(supplierId);
     }
 
     // ── SEARCH BY SKU ─────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public Product getProductBySku(String sku) {
-        return repository.findBySku(sku)
+        return repository.findBySkuAndIsActiveTrue(sku)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "No product found with SKU: '" + sku + "'"));

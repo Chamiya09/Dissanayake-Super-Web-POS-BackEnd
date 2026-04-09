@@ -102,7 +102,7 @@ public class SupplierService {
     public void deleteSupplier(Long id) {
         Supplier supplier = getSupplierById(id);
 
-        List<Product> assignedProducts = productRepository.findBySupplierId(id);
+        List<Product> assignedProducts = productRepository.findBySupplierIdAndIsActiveTrue(id);
         if (!assignedProducts.isEmpty()) {
             List<String> nonZeroStockProducts = assignedProducts.stream()
                     .filter(product -> currentInventoryQty(product) > ZERO_TOLERANCE)
@@ -117,8 +117,13 @@ public class SupplierService {
             }
 
             // Business rule: when supplier is removed and all assigned product stock is zero,
-            // delete those assigned products automatically.
-            productRepository.deleteAll(assignedProducts);
+            // soft-delete those assigned products and release their barcodes.
+            assignedProducts.forEach(product -> {
+                product.setSupplier(null);
+                product.setSku(null);
+                product.setActive(false);
+            });
+            productRepository.saveAll(assignedProducts);
         }
 
         repository.delete(supplier);

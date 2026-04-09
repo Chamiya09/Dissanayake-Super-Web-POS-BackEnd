@@ -1,8 +1,12 @@
 package com.dissayakesuper.web_pos_backend.product.dto;
 
-import jakarta.validation.constraints.*;
-
 import java.math.BigDecimal;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /**
  * Inbound DTO for create and update operations.
@@ -14,9 +18,11 @@ public record ProductRequest(
         @Size(max = 255)
         String productName,
 
-        @NotBlank(message = "SKU / Barcode is required.")
         @Size(max = 100)
         String sku,
+
+        @Size(max = 100)
+        String barcode,
 
         @NotBlank(message = "Category is required.")
         @Size(max = 100)
