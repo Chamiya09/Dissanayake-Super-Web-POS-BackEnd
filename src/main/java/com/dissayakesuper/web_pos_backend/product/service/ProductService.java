@@ -27,15 +27,22 @@ import com.dissayakesuper.web_pos_backend.product.dto.ProductPageResponse;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductRequest;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
+import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 
 @Service
 @Transactional
 public class ProductService {
 
-    private final ProductRepository repository;
+    private static final double STOCK_EPSILON = 1e-6;
 
-    public ProductService(ProductRepository repository) {
+    private final ProductRepository repository;
+    private final InventoryRepository inventoryRepository;
+
+    public ProductService(
+            ProductRepository repository,
+            InventoryRepository inventoryRepository) {
         this.repository = repository;
+        this.inventoryRepository = inventoryRepository;
     }
 
     // ── READ ALL ──────────────────────────────────────────────────────────────
@@ -311,11 +318,46 @@ public class ProductService {
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     public void deleteProduct(Long id) {
-        // Ensures 404 for unknown/inactive id before attempting update query.
-        getProductById(id);
+        // Ensures 404 for unknown/inactive id before attempting hard delete.
+        Product product = getProductById(id);
 
-        // Soft-delete + barcode release in one write operation.
-        repository.softDeleteAndReleaseBarcode(id);
+        boolean hasRemainingStock = hasStock(product);
+        boolean isAssignedToSupplier = isSupplierAssigned(product);
+
+        if (hasRemainingStock || isAssignedToSupplier) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    buildDeleteBlockedMessage(hasRemainingStock, isAssignedToSupplier));
+        }
+
+        if (inventoryRepository.existsByProductId(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Cannot delete product: It is currently present in the Inventory.");
+        }
+
+        repository.deleteById(id);
+    }
+
+    private boolean hasStock(Product product) {
+        Double stockQuantity = product.getStockQuantity();
+        return stockQuantity != null && stockQuantity > STOCK_EPSILON;
+    }
+
+    private boolean isSupplierAssigned(Product product) {
+        return product.getSupplierId() != null || product.getSupplier() != null;
+    }
+
+    private String buildDeleteBlockedMessage(boolean hasRemainingStock, boolean isAssignedToSupplier) {
+        if (hasRemainingStock && isAssignedToSupplier) {
+            return "Cannot delete product. There is still remaining stock in the inventory. Cannot delete product. This item is currently assigned to a supplier.";
+        }
+
+        if (hasRemainingStock) {
+            return "Cannot delete product. There is still remaining stock in the inventory.";
+        }
+
+        return "Cannot delete product. This item is currently assigned to a supplier.";
     }
 
     // ── GET UNASSIGNED ────────────────────────────────────────────────────────

@@ -11,4 +11,7 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
 
     /** Retrieve all line items belonging to a specific sale. */
     List<SaleItem> findBySaleId(Long saleId);
+
+    /** Fast existence check used by hard-delete guards in ProductService. */
+    boolean existsByProductId(Long productId);
 }

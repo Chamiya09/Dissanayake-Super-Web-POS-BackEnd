@@ -38,6 +38,14 @@ public class User {
     @Column(nullable = false, unique = true, length = 150)
     private String email;
 
+    @Size(max = 30, message = "Phone number must be 30 characters or fewer.")
+    @Column(name = "phone_number", length = 30)
+    private String phoneNumber;
+
+    @Size(max = 255, message = "Address must be 255 characters or fewer.")
+    @Column(name = "address", length = 255)
+    private String address;
+
     @NotBlank(message = "Password hash is required.")
     @Size(max = 255, message = "Password hash must be 255 characters or fewer.")
     @Column(name = "password_hash", nullable = false, length = 255)
