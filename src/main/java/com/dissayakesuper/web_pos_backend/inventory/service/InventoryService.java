@@ -150,7 +150,7 @@ public class InventoryService {
 
         Inventory saved = inventoryRepository.save(inventory);
 
-        // ── Audit log: record the manual stock addition ──────────────────────
+        // Record the manual stock addition.
         inventoryLogRepository.save(InventoryLog.builder()
                 .productId(saved.getProduct().getId())
                 .productName(saved.getProduct().getProductName())
@@ -376,7 +376,7 @@ public class InventoryService {
         return inventoryRepository.save(inv);
     }
 
-    // ── AUDIT LOG ─────────────────────────────────────────────────────────────
+    // Stock history
 
     /**
      * Returns the full stock-change history for a product, newest first.

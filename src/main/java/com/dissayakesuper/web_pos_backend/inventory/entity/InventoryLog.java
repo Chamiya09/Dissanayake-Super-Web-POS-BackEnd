@@ -16,7 +16,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Audit log — one row is written every time stock is manually updated.
+ * Stock history log. One row is written every time stock is manually updated.
  * Intentionally denormalised (stores productName snapshot) so the history
  * remains meaningful even if the product is later renamed or deleted.
  */

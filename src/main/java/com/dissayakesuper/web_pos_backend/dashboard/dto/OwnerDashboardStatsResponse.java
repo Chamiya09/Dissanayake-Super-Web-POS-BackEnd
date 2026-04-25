@@ -1,15 +1,13 @@
 package com.dissayakesuper.web_pos_backend.dashboard.dto;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 public record OwnerDashboardStatsResponse(
         Kpis kpis,
         List<RevenuePoint> last30DaysRevenueTrend,
         List<CategoryPoint> salesByCategory,
-        List<TopSellingProduct> topSellingProducts,
-        List<RecentAlert> recentAlerts
+        List<TopSellingProduct> topSellingProducts
 ) {
     public record Kpis(
             double totalRevenue,
@@ -34,13 +32,6 @@ public record OwnerDashboardStatsResponse(
     public record TopSellingProduct(
             String name,
             double qty
-    ) {
-    }
-
-    public record RecentAlert(
-            Long id,
-            String action,
-            LocalDateTime timestamp
     ) {
     }
 }

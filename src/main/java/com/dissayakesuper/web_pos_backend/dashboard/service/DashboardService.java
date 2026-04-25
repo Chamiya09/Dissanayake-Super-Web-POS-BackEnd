@@ -1,7 +1,5 @@
 package com.dissayakesuper.web_pos_backend.dashboard.service;
 
-import com.dissayakesuper.web_pos_backend.audit.entity.AuditLog;
-import com.dissayakesuper.web_pos_backend.audit.repository.AuditLogRepository;
 import com.dissayakesuper.web_pos_backend.dashboard.dto.ManagerDashboardStatsResponse;
 import com.dissayakesuper.web_pos_backend.dashboard.dto.OwnerDashboardStatsResponse;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
@@ -35,20 +33,17 @@ public class DashboardService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final InventoryRepository inventoryRepository;
-    private final AuditLogRepository auditLogRepository;
     private final ShiftRepository shiftRepository;
 
     public DashboardService(SaleRepository saleRepository,
                             ProductRepository productRepository,
                             UserRepository userRepository,
                             InventoryRepository inventoryRepository,
-                            AuditLogRepository auditLogRepository,
                             ShiftRepository shiftRepository) {
         this.saleRepository = saleRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.inventoryRepository = inventoryRepository;
-        this.auditLogRepository = auditLogRepository;
         this.shiftRepository = shiftRepository;
     }
 
@@ -128,11 +123,6 @@ public class DashboardService {
                 .map(entry -> new OwnerDashboardStatsResponse.TopSellingProduct(entry.getKey(), round3(entry.getValue())))
                 .toList();
 
-        List<OwnerDashboardStatsResponse.RecentAlert> recentAlerts = auditLogRepository.findTop8ByOrderByTimestampDesc()
-                .stream()
-                .map(this::toRecentAlert)
-                .toList();
-
         OwnerDashboardStatsResponse.Kpis kpis = new OwnerDashboardStatsResponse.Kpis(
                 round2(totalRevenue),
                 round2(netProfit),
@@ -140,7 +130,7 @@ public class DashboardService {
                 inventoryRepository.findAllLowStock().size()
         );
 
-        return new OwnerDashboardStatsResponse(kpis, trend, categoryPoints, topSellingProducts, recentAlerts);
+        return new OwnerDashboardStatsResponse(kpis, trend, categoryPoints, topSellingProducts);
     }
 
     public ManagerDashboardStatsResponse getManagerStats() {
@@ -209,14 +199,6 @@ public class DashboardService {
         }
 
         return points;
-    }
-
-    private OwnerDashboardStatsResponse.RecentAlert toRecentAlert(AuditLog log) {
-        return new OwnerDashboardStatsResponse.RecentAlert(
-                log.getId(),
-                log.getAction(),
-                log.getTimestamp()
-        );
     }
 
     private boolean isStatus(String actual, String expected) {

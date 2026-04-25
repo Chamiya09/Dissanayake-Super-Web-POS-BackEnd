@@ -103,7 +103,7 @@ public class SaleService {
             inventory.setStockQuantity(newQty);
             inventoryRepository.save(inventory);
 
-            // ── Audit log: record the stock deduction caused by this sale ─────
+            // Record the stock deduction caused by this sale.
             inventoryLogRepository.save(InventoryLog.builder()
                     .productId(inventory.getProduct().getId())
                     .productName(inventory.getProduct().getProductName())

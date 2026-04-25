@@ -1,4 +1,4 @@
--- V10: Create inventory_logs audit table
+-- V10: Create inventory_logs stock history table
 
 CREATE TABLE inventory_logs (
     id               BIGSERIAL       PRIMARY KEY,
