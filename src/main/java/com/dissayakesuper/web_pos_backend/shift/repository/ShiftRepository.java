@@ -14,4 +14,6 @@ public interface ShiftRepository extends JpaRepository<Shift, Long> {
     List<Shift> findByUserIdOrderByStartTimeDesc(Long userId);
 
     List<Shift> findAllByOrderByStartTimeDesc();
+
+    long countByStatus(ShiftStatus status);
 }
