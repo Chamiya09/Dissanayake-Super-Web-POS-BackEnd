@@ -11,6 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import com.dissayakesuper.web_pos_backend.product.entity.ProductStatus;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 import com.dissayakesuper.web_pos_backend.supplier.dto.SupplierRequest;
 import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
@@ -97,6 +98,22 @@ public class SupplierService {
         return repository.save(existing);
     }
 
+    public Supplier updateSupplierActiveStatus(Long id, boolean active) {
+        Supplier supplier = getSupplierById(id);
+        if (supplier.isActive() == active) {
+            return supplier;
+        }
+
+        supplier.setActive(active);
+
+        List<Product> singleSourceProducts = productRepository.findBySupplierIdAndIsActiveTrue(id);
+        ProductStatus nextStatus = active ? ProductStatus.ACTIVE : ProductStatus.DISCONTINUED;
+        singleSourceProducts.forEach(product -> product.setStatus(nextStatus));
+        productRepository.saveAll(singleSourceProducts);
+
+        return repository.save(supplier);
+    }
+
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     public void deleteSupplier(Long id) {
@@ -122,6 +139,7 @@ public class SupplierService {
                 product.setSupplier(null);
                 product.setSku(null);
                 product.setActive(false);
+                product.setStatus(ProductStatus.DISCONTINUED);
             });
             productRepository.saveAll(assignedProducts);
         }

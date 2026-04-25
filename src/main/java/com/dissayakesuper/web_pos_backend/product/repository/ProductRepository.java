@@ -70,6 +70,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         Page<Product> searchActiveProducts(@Param("searchTerm") String searchTerm, Pageable pageable);
 
     @Modifying
-    @Query("UPDATE Product p SET p.isActive = false, p.barcode = null, p.supplier = null WHERE p.id = :id AND p.isActive = true")
+    @Query("UPDATE Product p SET p.isActive = false, p.status = com.dissayakesuper.web_pos_backend.product.entity.ProductStatus.DISCONTINUED, p.barcode = null, p.supplier = null WHERE p.id = :id AND p.isActive = true")
     int softDeleteAndReleaseBarcode(@Param("id") Long id);
 }

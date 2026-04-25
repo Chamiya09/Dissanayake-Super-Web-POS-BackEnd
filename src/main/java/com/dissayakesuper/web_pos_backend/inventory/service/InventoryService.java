@@ -25,6 +25,7 @@ import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepository;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import com.dissayakesuper.web_pos_backend.product.entity.ProductStatus;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 
 @Service
@@ -66,6 +67,7 @@ public class InventoryService {
 
         long tracked    = all.size();
         long lowStock   = all.stream().filter(i -> {
+                if (isDiscontinued(i.getProduct())) return false;
                 double qty = i.getStockQuantity() != null ? i.getStockQuantity() : 0.0;
                 double reorder = i.getReorderLevel() != null ? i.getReorderLevel() : 0.0;
                 return qty > 0 && qty <= reorder;
@@ -471,5 +473,9 @@ public class InventoryService {
 
     private static String safeMessage(String message) {
         return message == null || message.isBlank() ? "No details available." : message;
+    }
+
+    private static boolean isDiscontinued(Product product) {
+        return product != null && product.getStatus() == ProductStatus.DISCONTINUED;
     }
 }

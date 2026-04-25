@@ -44,6 +44,10 @@ public class Supplier {
     @Column(name = "is_auto_reorder_enabled", nullable = false)
     private boolean isAutoReorderEnabled = false;
 
+    @JsonProperty("isActive")
+    @Column(name = "is_active", nullable = false)
+    private boolean isActive = true;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -87,6 +91,9 @@ public class Supplier {
 
     public boolean isAutoReorderEnabled() { return isAutoReorderEnabled; }
     public void setAutoReorderEnabled(boolean autoReorderEnabled) { this.isAutoReorderEnabled = autoReorderEnabled; }
+
+    public boolean isActive() { return isActive; }
+    public void setActive(boolean active) { isActive = active; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
 }
