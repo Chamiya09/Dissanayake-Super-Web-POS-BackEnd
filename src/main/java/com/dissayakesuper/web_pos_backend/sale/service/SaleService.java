@@ -15,6 +15,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,6 +93,11 @@ public class SaleService {
     public Sale createSale(Sale sale) {
         // Transaction IDs are generated server-side to guarantee sequential continuity.
         sale.setReceiptNo(transactionIdService.nextTransactionId());
+        currentAuthenticatedUser().ifPresent(user -> {
+            sale.setCashierId(user.getId());
+            sale.setCashierUsername(user.getUsername());
+            sale.setCashierName(user.getFullName());
+        });
 
         // ── Deduct stock for every item in this sale ──────────────────────────
         for (SaleItem item : sale.getItems()) {
@@ -133,7 +141,20 @@ public class SaleService {
 
     @Transactional(readOnly = true)
     public List<Sale> getAllSales() {
-        return saleRepository.findAll();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (hasAnyRole(auth, "ROLE_OWNER", "ROLE_MANAGER")) {
+            return saleRepository.findAllByOrderBySaleDateDescIdDesc();
+        }
+
+        if (hasAnyRole(auth, "ROLE_STAFF")) {
+            User currentUser = currentAuthenticatedUser()
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.FORBIDDEN,
+                            "Authenticated user not found."));
+            return saleRepository.findByCashierIdOrderBySaleDateDescIdDesc(currentUser.getId());
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized to view sales.");
     }
 
     @Transactional(readOnly = true)
@@ -209,10 +230,12 @@ public class SaleService {
 
     @Transactional(readOnly = true)
     public Sale getSaleById(Long id) {
-        return saleRepository.findById(id)
+        Sale sale = saleRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Sale not found with id: " + id));
+        enforceSaleVisibility(sale);
+        return sale;
     }
 
     // ── UPDATE SALE (reverse + re-adjust) ──────────────────────────────────────
@@ -505,6 +528,44 @@ public class SaleService {
         }
 
         return approver;
+    }
+
+    private Optional<User> currentAuthenticatedUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null || !auth.isAuthenticated()) {
+            return Optional.empty();
+        }
+        return userRepository.findByUsername(auth.getName());
+    }
+
+    private boolean hasAnyRole(Authentication auth, String... roles) {
+        if (auth == null || auth.getAuthorities() == null) {
+            return false;
+        }
+
+        Set<String> requiredRoles = Set.of(roles);
+        return auth.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(requiredRoles::contains);
+    }
+
+    private void enforceSaleVisibility(Sale sale) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (hasAnyRole(auth, "ROLE_OWNER", "ROLE_MANAGER")) {
+            return;
+        }
+
+        if (hasAnyRole(auth, "ROLE_STAFF")) {
+            User currentUser = currentAuthenticatedUser()
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.FORBIDDEN,
+                            "Authenticated user not found."));
+            if (sale.getCashierId() != null && sale.getCashierId().equals(currentUser.getId())) {
+                return;
+            }
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized to view this sale.");
     }
 
     private java.math.BigDecimal getReturnedQty(SaleItem item) {
