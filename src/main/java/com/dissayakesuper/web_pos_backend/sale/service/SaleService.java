@@ -397,6 +397,7 @@ public class SaleService {
 
         return returnSelectedItems(saleId, new SaleReturnRequest(
                 fullReturnItems,
+                request.approverId(),
                 request.approverEmail(),
                 request.approverPassword()
         ));
@@ -502,14 +503,25 @@ public class SaleService {
     }
 
     private User validateReturnApprover(SaleReturnRequest request) {
-        String approverEmail = safe(request.approverEmail());
+        String approverId = safe(request.approverId());
+        String legacyApproverEmail = safe(request.approverEmail());
+        String approverIdentifier = approverId.isBlank() ? legacyApproverEmail : approverId;
         String approverPassword = request.approverPassword() == null ? "" : request.approverPassword();
 
-        if (approverEmail.isBlank() || approverPassword.isBlank()) {
+        if (approverIdentifier.isBlank() || approverPassword.isBlank()) {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (hasAnyRole(auth, "ROLE_OWNER", "ROLE_MANAGER")) {
+                return currentAuthenticatedUser()
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.FORBIDDEN,
+                                "Authenticated approver not found."));
+            }
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Approver Credentials");
         }
 
-        User approver = userRepository.findByEmailIgnoreCase(approverEmail)
+        User approver = userRepository.findByMemberIdIgnoreCase(approverIdentifier)
+                .or(() -> userRepository.findByUsernameIgnoreCase(approverIdentifier))
+                .or(() -> userRepository.findByEmailIgnoreCase(approverIdentifier))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.UNAUTHORIZED,
                         "Invalid Approver Credentials"));
