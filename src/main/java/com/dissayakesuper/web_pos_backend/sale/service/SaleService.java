@@ -15,10 +15,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.dissayakesuper.web_pos_backend.audit.service.AuditLogService;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepository;
@@ -32,6 +34,8 @@ import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.entity.SaleItem;
 import com.dissayakesuper.web_pos_backend.sale.repository.SaleRepository;
+import com.dissayakesuper.web_pos_backend.user.entity.User;
+import com.dissayakesuper.web_pos_backend.user.repository.UserRepository;
 
 @Service
 @Transactional
@@ -59,17 +63,26 @@ public class SaleService {
     private final InventoryLogRepository inventoryLogRepository;
     private final ProductRepository productRepository;
     private final TransactionIdService transactionIdService;
+    private final UserRepository userRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
+    private final AuditLogService auditLogService;
 
     public SaleService(SaleRepository saleRepository,
                        InventoryRepository inventoryRepository,
                        InventoryLogRepository inventoryLogRepository,
                        ProductRepository productRepository,
-                       TransactionIdService transactionIdService) {
+                       TransactionIdService transactionIdService,
+                       UserRepository userRepository,
+                       BCryptPasswordEncoder passwordEncoder,
+                       AuditLogService auditLogService) {
         this.saleRepository       = saleRepository;
         this.inventoryRepository  = inventoryRepository;
         this.inventoryLogRepository = inventoryLogRepository;
         this.productRepository = productRepository;
         this.transactionIdService = transactionIdService;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.auditLogService = auditLogService;
     }
 
     // ── CREATE ────────────────────────────────────────────────────────────────
@@ -346,7 +359,7 @@ public class SaleService {
      * @throws ResponseStatusException 404 if sale not found, 409 if already Voided/Returned
      */
     @Transactional
-    public Sale returnSale(Long saleId) {
+    public Sale returnSale(Long saleId, SaleReturnRequest request) {
         Sale sale = getSaleById(saleId);
         List<SaleReturnItemRequest> fullReturnItems = sale.getItems().stream()
                 .map(item -> {
@@ -359,12 +372,17 @@ public class SaleService {
                 .filter(item -> item != null)
                 .toList();
 
-        return returnSelectedItems(saleId, new SaleReturnRequest(fullReturnItems));
+        return returnSelectedItems(saleId, new SaleReturnRequest(
+                fullReturnItems,
+                request.approverEmail(),
+                request.approverPassword()
+        ));
     }
 
     @Transactional
     public Sale returnSelectedItems(Long saleId, SaleReturnRequest request) {
         Sale sale = getSaleById(saleId);
+        User approver = validateReturnApprover(request);
 
         String currentStatus = sale.getStatus();
         if ("Voided".equalsIgnoreCase(currentStatus) || "Returned".equalsIgnoreCase(currentStatus)) {
@@ -378,7 +396,12 @@ public class SaleService {
             itemsById.put(item.getId(), item);
         }
 
-        for (SaleReturnItemRequest returnItem : request.items()) {
+        List<SaleReturnItemRequest> requestedItems = request.items() == null ? List.of() : request.items();
+        if (requestedItems.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one item to return.");
+        }
+
+        for (SaleReturnItemRequest returnItem : requestedItems) {
             SaleItem saleItem = itemsById.get(returnItem.saleItemId());
             if (saleItem == null) {
                 throw new ResponseStatusException(
@@ -446,7 +469,42 @@ public class SaleService {
             sale.setStatus("Partially Returned");
         }
 
-        return saleRepository.save(sale);
+        Sale saved = saleRepository.save(sale);
+        auditLogService.logAction(
+                approver.getId(),
+                "SALE_RETURN",
+                "Sale " + saleId + " return approved by " + approver.getEmail()
+        );
+        return saved;
+    }
+
+    private User validateReturnApprover(SaleReturnRequest request) {
+        String approverEmail = safe(request.approverEmail());
+        String approverPassword = request.approverPassword() == null ? "" : request.approverPassword();
+
+        if (approverEmail.isBlank() || approverPassword.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Approver Credentials");
+        }
+
+        User approver = userRepository.findByEmailIgnoreCase(approverEmail)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Invalid Approver Credentials"));
+
+        if (!approver.isActive() || !passwordEncoder.matches(approverPassword, approver.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Approver Credentials");
+        }
+
+        String role = approver.getRole() == null ? "" : approver.getRole().trim();
+        boolean authorized = "Owner".equalsIgnoreCase(role)
+                || "Manager".equalsIgnoreCase(role)
+                || ("Staff".equalsIgnoreCase(role) && approver.isSenior());
+
+        if (!authorized) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized Approver");
+        }
+
+        return approver;
     }
 
     private java.math.BigDecimal getReturnedQty(SaleItem item) {

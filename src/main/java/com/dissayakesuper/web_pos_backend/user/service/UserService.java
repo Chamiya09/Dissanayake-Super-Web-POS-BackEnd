@@ -86,7 +86,7 @@ public class UserService {
     private UserResponse toResponse(User u) {
         UserResponse r = new UserResponse(u.getId(), u.getUsername(), u.getMemberId(), u.getFullName(),
                                           u.getEmail(), u.getPhoneNumber(), u.getAddress(),
-                                          u.getRole(), u.isActive());
+                                          u.getRole(), u.isActive(), u.isSenior());
         r.setCreatedAt(u.getCreatedAt());
         return r;
     }
@@ -173,6 +173,7 @@ public class UserService {
         user.setPhoneNumber(phoneNumber);
         user.setAddress(address);
         user.setRole(role);
+        user.setSenior("Staff".equals(role) && req.isSenior());
         user.setPasswordHash(encoder.encode(password));
         user.setActive(true);
 
@@ -222,6 +223,7 @@ public class UserService {
         if (req.getPhoneNumber() != null) user.setPhoneNumber(normalize(req.getPhoneNumber()));
         if (req.getAddress() != null) user.setAddress(normalize(req.getAddress()));
         user.setRole(newRole);
+        user.setSenior("Staff".equals(newRole) && req.isSenior());
 
         return toResponse(repo.save(user));
     }

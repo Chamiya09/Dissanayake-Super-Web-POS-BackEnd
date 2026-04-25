@@ -1,5 +1,6 @@
 package com.dissayakesuper.web_pos_backend.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -37,6 +38,9 @@ public class CreateUserRequest {
     @Size(min = 6, max = 255, message = "Password must be between 6 and 255 characters.")
     private String password;
 
+    @JsonProperty("isSenior")
+    private boolean isSenior;
+
     public CreateUserRequest() {}
 
     public String getUsername() { return username; }
@@ -62,4 +66,7 @@ public class CreateUserRequest {
 
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
+
+    public boolean isSenior() { return isSenior; }
+    public void setSenior(boolean senior) { isSenior = senior; }
 }

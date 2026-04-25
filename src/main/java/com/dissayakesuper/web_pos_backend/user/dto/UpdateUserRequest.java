@@ -1,5 +1,6 @@
 package com.dissayakesuper.web_pos_backend.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -31,6 +32,9 @@ public class UpdateUserRequest {
     @Size(max = 30, message = "Role must be 30 characters or fewer.")
     private String role;
 
+    @JsonProperty("isSenior")
+    private boolean isSenior;
+
     public UpdateUserRequest() {}
 
     public String getUsername() { return username; }
@@ -53,4 +57,7 @@ public class UpdateUserRequest {
 
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+
+    public boolean isSenior() { return isSenior; }
+    public void setSenior(boolean senior) { isSenior = senior; }
 }

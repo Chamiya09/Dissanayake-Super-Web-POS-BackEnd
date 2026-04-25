@@ -1,5 +1,7 @@
 package com.dissayakesuper.web_pos_backend.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.LocalDateTime;
 
 public class UserResponse {
@@ -13,12 +15,14 @@ public class UserResponse {
     private String address;
     private String role;
     private boolean active;
+    @JsonProperty("isSenior")
+    private boolean isSenior;
     private LocalDateTime createdAt;
 
     public UserResponse() {}
 
     public UserResponse(Long id, String username, String memberId, String fullName, String email,
-                        String phoneNumber, String address, String role, boolean active) {
+                        String phoneNumber, String address, String role, boolean active, boolean isSenior) {
         this.id = id;
         this.username = username;
         this.memberId = memberId;
@@ -28,6 +32,7 @@ public class UserResponse {
         this.address = address;
         this.role = role;
         this.active = active;
+        this.isSenior = isSenior;
     }
 
     public Long getId() { return id; }
@@ -56,6 +61,9 @@ public class UserResponse {
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+
+    public boolean isSenior() { return isSenior; }
+    public void setSenior(boolean senior) { isSenior = senior; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

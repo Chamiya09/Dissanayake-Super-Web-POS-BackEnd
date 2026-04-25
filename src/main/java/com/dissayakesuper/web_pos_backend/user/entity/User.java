@@ -59,6 +59,9 @@ public class User {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "is_senior", nullable = false)
+    private boolean senior = false;
+
     @Column(name = "email_notifications", nullable = false)
     private boolean emailNotifications = false;
 
