@@ -7,7 +7,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -35,7 +34,6 @@ import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 public class ProductService {
 
     private static final double STOCK_EPSILON = 1e-6;
-    private static final String SKU_PREFIX = "PI";
 
     private final ProductRepository repository;
     private final InventoryRepository inventoryRepository;
@@ -144,10 +142,6 @@ public class ProductService {
         String sku = normalizeOptional(request.sku());
         String barcode = normalizeOptional(request.barcode());
 
-        if (sku == null) {
-            sku = generateSku();
-        }
-
         if (sku != null && repository.existsBySkuAndIsActiveTrue(sku)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -172,26 +166,13 @@ public class ProductService {
             request.reorderLevel()
         );
 
-        if (product.getSku() == null || product.getSku().isBlank()) {
-            product.setSku(generateSku());
-        }
-
         try {
             return repository.save(product);
         } catch (DataIntegrityViolationException ex) {
-            Throwable cause = ex.getCause();
-            String rootMessage = safeMessage(cause == null
-                    ? ex.getMessage()
-                    : cause.getMessage());
-
-            if (rootMessage.contains("column \"sku\"") && rootMessage.contains("not-null")) {
-                product.setSku(generateSku());
-                return repository.save(product);
-            }
-
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Product could not be created because SKU or barcode already exists.");
+                "Product could not be created because SKU or barcode already exists."
+            );
         }
     }
 
@@ -483,21 +464,6 @@ public class ProductService {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private String generateSku() {
-        for (int i = 0; i < 10; i++) {
-            long timePart = System.currentTimeMillis() % 1_000_000_000L;
-            int randomPart = ThreadLocalRandom.current().nextInt(100, 1000);
-            String candidate = SKU_PREFIX + timePart + randomPart;
-            if (!repository.existsBySkuAndIsActiveTrue(candidate)) {
-                return candidate;
-            }
-        }
-
-        throw new ResponseStatusException(
-                HttpStatus.INTERNAL_SERVER_ERROR,
-                "Unable to generate a unique SKU. Please try again.");
     }
 
     private static ProductImportSuccess toImportSuccess(Product saved) {

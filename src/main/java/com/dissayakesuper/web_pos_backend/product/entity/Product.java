@@ -2,7 +2,6 @@ package com.dissayakesuper.web_pos_backend.product.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -19,7 +18,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -29,10 +27,7 @@ import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "products")
-@SuppressWarnings("unused")
 public class Product {
-
-    private static final String SKU_PREFIX = "PI";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -176,11 +171,4 @@ public class Product {
 
     public ProductStatus getStatus() { return status; }
     public void setStatus(ProductStatus status) { this.status = status != null ? status : ProductStatus.ACTIVE; }
-
-    @PrePersist
-    private void ensureSkuBeforeInsert() {
-        if (sku == null || sku.isBlank()) {
-            sku = SKU_PREFIX + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
-        }
-    }
 }
