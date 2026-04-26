@@ -29,6 +29,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Optional<Product> findByIdAndIsActiveTrue(Long id);
 
+    @Query("SELECT p FROM Product p LEFT JOIN FETCH p.supplier WHERE p.id = :id")
+    Optional<Product> findByIdWithSupplier(@Param("id") Long id);
+
     Optional<Product> findFirstByProductNameIgnoreCase(String productName);
 
     List<Product> findByIsActiveTrue();

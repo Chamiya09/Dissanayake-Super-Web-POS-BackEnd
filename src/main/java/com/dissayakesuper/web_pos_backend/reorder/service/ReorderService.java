@@ -321,6 +321,9 @@ public class ReorderService {
         return inventoryRepository.findAllLowStock()
                 .stream()
                 .filter(inv -> inv.getProduct() == null || inv.getProduct().getStatus() != ProductStatus.DISCONTINUED)
+                .filter(inv -> inv.getProduct() == null
+                        || inv.getProduct().getSupplier() == null
+                        || inv.getProduct().getSupplier().isActive())
                 .map(this::toDTO)
                 .toList();
     }
@@ -364,7 +367,7 @@ public class ReorderService {
     private void validateOrderableProduct(ReorderItemRequestDTO itemDTO, String orderRef) {
         Product product = null;
         if (itemDTO.productId() != null) {
-            product = productRepository.findById(itemDTO.productId()).orElse(null);
+            product = productRepository.findByIdWithSupplier(itemDTO.productId()).orElse(null);
         }
         if (product == null && itemDTO.productName() != null && !itemDTO.productName().isBlank()) {
             product = productRepository.findFirstByProductNameIgnoreCase(itemDTO.productName()).orElse(null);
@@ -377,7 +380,7 @@ public class ReorderService {
         }
         Supplier supplier = product != null ? product.getSupplier() : null;
         if (supplier != null && !supplier.isActive()) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Action blocked: Associated supplier is inactive.");
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Action Blocked: Associated supplier is currently inactive");
         }
     }
 
@@ -388,7 +391,7 @@ public class ReorderService {
         supplierRepository.findByEmail(supplierEmail)
                 .filter(supplier -> !supplier.isActive())
                 .ifPresent(supplier -> {
-                    throw new BusinessException(HttpStatus.BAD_REQUEST, "Action blocked: Associated supplier is inactive.");
+                    throw new BusinessException(HttpStatus.BAD_REQUEST, "Action Blocked: Associated supplier is currently inactive");
                 });
     }
 

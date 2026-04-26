@@ -16,6 +16,9 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     /** Find the inventory record linked to a specific product. */
     Optional<Inventory> findByProductId(Long productId);
 
+    @Query("SELECT i FROM Inventory i JOIN FETCH i.product p LEFT JOIN FETCH p.supplier WHERE p.id = :productId")
+    Optional<Inventory> findByProductIdWithProduct(@Param("productId") Long productId);
+
     /** Find the inventory record by the product's name (used during sale processing). */
     Optional<Inventory> findByProductProductName(String productName);
 
@@ -32,6 +35,6 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     /** Returns all records where current stock is at or below the reorder threshold.
      *  Uses JOIN FETCH to load the associated Product and its optional Supplier
      *  in a single query (avoids N+1). Supplier is LEFT JOIN because it is nullable. */
-    @Query("SELECT i FROM Inventory i JOIN FETCH i.product p LEFT JOIN FETCH p.supplier WHERE p.isActive = true AND p.status <> com.dissayakesuper.web_pos_backend.product.entity.ProductStatus.DISCONTINUED AND i.stockQuantity <= i.reorderLevel ORDER BY i.stockQuantity ASC")
+    @Query("SELECT i FROM Inventory i JOIN FETCH i.product p LEFT JOIN FETCH p.supplier s WHERE p.isActive = true AND p.status <> com.dissayakesuper.web_pos_backend.product.entity.ProductStatus.DISCONTINUED AND (s IS NULL OR s.active = true) AND i.stockQuantity <= i.reorderLevel ORDER BY i.stockQuantity ASC")
     List<Inventory> findAllLowStock();
 }

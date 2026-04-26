@@ -169,8 +169,16 @@ public class SupplierService {
                     HttpStatus.BAD_REQUEST,
                     "One or more product IDs were not found.");
         }
-        products.forEach(p -> p.setSupplier(supplier));
+        ProductStatus assignedStatus = supplier.isActive() ? ProductStatus.ACTIVE : ProductStatus.DISCONTINUED;
+        products.forEach(p -> {
+            p.setSupplier(supplier);
+            p.setStatus(assignedStatus);
+        });
         productRepository.saveAll(products);
+
+        if (!supplier.isActive()) {
+            reorderRepository.markOrdersForProducts(productIds, Status.PENDING, Status.CANCELLED);
+        }
     }
 
     private double currentInventoryQty(Product product) {

@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.dissayakesuper.web_pos_backend.config.BusinessException;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryBulkImportResponse;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryAnalyticsDTO;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryImportError;
@@ -144,8 +145,9 @@ public class InventoryService {
                     "quantityToAdd must be greater than zero.");
         }
 
-        Inventory inventory = inventoryRepository.findByProductId(productId)
+        Inventory inventory = inventoryRepository.findByProductIdWithProduct(productId)
                 .orElseGet(() -> createInventoryForProduct(productId));
+        validateSupplierActiveForStockAddition(inventory.getProduct());
 
         double newQty = inventory.getStockQuantity() + quantityToAdd;
         inventory.setStockQuantity(newQty);
@@ -215,6 +217,12 @@ public class InventoryService {
                 Product product = productRepository.findBySkuAndIsActiveTrue(sku).orElse(null);
                 if (product == null) {
                     errors.add(new InventoryImportError(rowNumber, sku, "SKU was not found in the database."));
+                    continue;
+                }
+                try {
+                    validateSupplierActiveForStockAddition(product);
+                } catch (BusinessException ex) {
+                    errors.add(new InventoryImportError(rowNumber, sku, ex.getMessage()));
                     continue;
                 }
 
@@ -298,6 +306,7 @@ public class InventoryService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Inventory record not found with id: " + inventoryId));
+        validateSupplierActiveForInventoryUpdate(inventory.getProduct());
 
         double newQty = inventory.getStockQuantity() + adjustmentAmount;
         if (newQty < 0) {
@@ -353,6 +362,7 @@ public class InventoryService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Inventory record not found with id: " + inventoryId));
+        validateSupplierActiveForInventoryUpdate(inv.getProduct());
 
         if (request.reorderLevel() != null) inv.setReorderLevel(request.reorderLevel());
         if (request.unit()         != null) inv.setUnit(request.unit());
@@ -404,10 +414,11 @@ public class InventoryService {
      * Inherits {@code unit} from the Product; stockQuantity starts at 0.0.
      */
     private Inventory createInventoryForProduct(Long productId) {
-        Product product = productRepository.findById(productId)
+        Product product = productRepository.findByIdWithSupplier(productId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Product not found with id: " + productId));
+        validateSupplierActiveForStockAddition(product);
 
         return Inventory.builder()
                 .product(product)
@@ -478,5 +489,15 @@ public class InventoryService {
 
     private static boolean isDiscontinued(Product product) {
         return product != null && product.getStatus() == ProductStatus.DISCONTINUED;
+    }
+
+    private void validateSupplierActiveForStockAddition(Product product) {
+        validateSupplierActiveForInventoryUpdate(product);
+    }
+
+    private void validateSupplierActiveForInventoryUpdate(Product product) {
+        if (product != null && product.getSupplier() != null && !product.getSupplier().isActive()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Action Blocked: Associated supplier is currently inactive");
+        }
     }
 }
