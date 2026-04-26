@@ -94,6 +94,7 @@ public class SupplierService {
                 });
 
         existing.setCompanyName(request.companyName());
+        existing.setSupplierCode(formatSupplierCode(id));
         existing.setContactPerson(request.contactPerson());
         existing.setEmail(request.email());
         existing.setPhone(request.phone());
@@ -123,7 +124,9 @@ public class SupplierService {
             reorderRepository.markOrdersForProducts(productIds, Status.PENDING, Status.CANCELLED);
         }
 
-        return repository.save(supplier);
+        Supplier saved = repository.saveAndFlush(supplier);
+        saved.setSupplierCode(formatSupplierCode(saved.getId()));
+        return repository.saveAndFlush(saved);
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────────
@@ -196,5 +199,12 @@ public class SupplierService {
             return String.format(Locale.ENGLISH, "%.0f", qty);
         }
         return String.format(Locale.ENGLISH, "%.3f", qty);
+    }
+
+    private static String formatSupplierCode(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Supplier id is required to generate supplier code.");
+        }
+        return String.format(Locale.ROOT, "SI%04d", id);
     }
 }

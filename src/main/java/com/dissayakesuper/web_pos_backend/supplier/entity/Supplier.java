@@ -15,6 +15,10 @@ public class Supplier {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Size(max = 100)
+    @Column(name = "supplier_code", unique = true, length = 100)
+    private String supplierCode;
+
     @NotBlank
     @Size(max = 255)
     @Column(name = "company_name", nullable = false, length = 255)
@@ -73,6 +77,9 @@ public class Supplier {
     // ── Getters & Setters ─────────────────────────────────────────────────────
 
     public Long getId() { return id; }
+
+    public String getSupplierCode() { return supplierCode; }
+    public void setSupplierCode(String supplierCode) { this.supplierCode = supplierCode; }
 
     public String getCompanyName() { return companyName; }
     public void setCompanyName(String companyName) { this.companyName = companyName; }
