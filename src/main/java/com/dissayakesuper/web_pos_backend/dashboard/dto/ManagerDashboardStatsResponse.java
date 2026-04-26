@@ -9,7 +9,6 @@ public record ManagerDashboardStatsResponse(
 ) {
     public record Kpis(
             double todaysSales,
-            long activeShifts,
             long pendingReturnsVoids,
             long outOfStockItems
     ) {

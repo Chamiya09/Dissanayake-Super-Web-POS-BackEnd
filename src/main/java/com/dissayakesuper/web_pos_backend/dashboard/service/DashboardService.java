@@ -10,8 +10,6 @@ import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.entity.SaleItem;
 import com.dissayakesuper.web_pos_backend.sale.repository.SaleRepository;
-import com.dissayakesuper.web_pos_backend.shift.entity.ShiftStatus;
-import com.dissayakesuper.web_pos_backend.shift.repository.ShiftRepository;
 import com.dissayakesuper.web_pos_backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
@@ -34,18 +32,15 @@ public class DashboardService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final InventoryRepository inventoryRepository;
-    private final ShiftRepository shiftRepository;
 
     public DashboardService(SaleRepository saleRepository,
                             ProductRepository productRepository,
                             UserRepository userRepository,
-                            InventoryRepository inventoryRepository,
-                            ShiftRepository shiftRepository) {
+                            InventoryRepository inventoryRepository) {
         this.saleRepository = saleRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.inventoryRepository = inventoryRepository;
-        this.shiftRepository = shiftRepository;
     }
 
     public OwnerDashboardStatsResponse getOwnerStats() {
@@ -175,7 +170,6 @@ public class DashboardService {
 
         ManagerDashboardStatsResponse.Kpis kpis = new ManagerDashboardStatsResponse.Kpis(
                 round2(todaysSales),
-                shiftRepository.countByStatus(ShiftStatus.OPEN),
                 pendingReturnsVoids,
                 outOfStockItems
         );
