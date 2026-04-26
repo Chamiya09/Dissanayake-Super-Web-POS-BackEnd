@@ -47,18 +47,19 @@ public class SaleService {
     private static final DateTimeFormatter EXPORT_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter EXPORT_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final List<String> ML_EXPORT_HEADERS = List.of(
+            "TransactionID",
             "Date",
             "Time",
-            "TransactionID",
             "ProductID",
             "ProductName",
             "Category",
             "PricingUnit",
-            "Quantity",
             "UnitPrice",
             "BuyingPrice",
             "SellingPrice",
-            "Total_LKR"
+            "Quantity",
+            "Total_LKR",
+            "Payment Method"
     );
 
     private final SaleRepository        saleRepository;
@@ -204,18 +205,19 @@ public class SaleService {
                 int totalLkr = toIntegerAmount(item.getLineTotal());
 
                 List<String> row = List.of(
+                        transactionId,
                         date,
                         time,
-                        transactionId,
                         productId,
                         productName,
                         category,
                         pricingUnit,
-                        quantity,
                         String.valueOf(unitPrice),
                         String.valueOf(buyingPrice),
                         String.valueOf(sellingPrice),
-                        String.valueOf(totalLkr)
+                        quantity,
+                        String.valueOf(totalLkr),
+                        safe(sale.getPaymentMethod())
                 );
 
                 out.writeBytes((row.stream().map(this::escapeCsv).collect(Collectors.joining(",")) + "\n")

@@ -138,11 +138,16 @@ public class InventoryService {
      * @param quantityToAdd amount to add (must be > 0)
      * @return the saved Inventory record
      */
-    public Inventory updateStock(Long productId, Double quantityToAdd) {
+    public Inventory updateStock(Long productId, Double quantityToAdd, Double reorderLevel) {
         if (quantityToAdd == null || quantityToAdd <= 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "quantityToAdd must be greater than zero.");
+        }
+        if (reorderLevel != null && reorderLevel < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "reorderLevel must be 0 or greater.");
         }
 
         Inventory inventory = inventoryRepository.findByProductIdWithProduct(productId)
@@ -151,6 +156,10 @@ public class InventoryService {
 
         double newQty = inventory.getStockQuantity() + quantityToAdd;
         inventory.setStockQuantity(newQty);
+        syncProductInventoryFields(inventory.getProduct(), newQty, reorderLevel);
+        if (reorderLevel != null) {
+            inventory.setReorderLevel(reorderLevel);
+        }
         inventory.setLastUpdated(LocalDateTime.now());
 
         Inventory saved = inventoryRepository.save(inventory);
@@ -240,6 +249,7 @@ public class InventoryService {
 
                 inventory.setStockQuantity(stockQuantity);
                 inventory.setReorderLevel(reorderLevel);
+                syncProductInventoryFields(product, stockQuantity, reorderLevel);
                 if (unit != null) {
                     inventory.setUnit(unit);
                 }
@@ -318,6 +328,7 @@ public class InventoryService {
         }
 
         inventory.setStockQuantity(newQty);
+        syncProductInventoryFields(inventory.getProduct(), newQty, null);
         inventory.setLastUpdated(LocalDateTime.now());
         Inventory saved = inventoryRepository.save(inventory);
 
@@ -364,13 +375,17 @@ public class InventoryService {
                         "Inventory record not found with id: " + inventoryId));
         validateSupplierActiveForInventoryUpdate(inv.getProduct());
 
-        if (request.reorderLevel() != null) inv.setReorderLevel(request.reorderLevel());
+        if (request.reorderLevel() != null) {
+            inv.setReorderLevel(request.reorderLevel());
+            syncProductInventoryFields(inv.getProduct(), null, request.reorderLevel());
+        }
         if (request.unit()         != null) inv.setUnit(request.unit());
 
         // ── Stock increment: new_stock = existing_stock + quantityToAdd ──────
         if (request.quantityToAdd() != null && request.quantityToAdd() > 0) {
             double newQty = inv.getStockQuantity() + request.quantityToAdd();
             inv.setStockQuantity(newQty);
+            syncProductInventoryFields(inv.getProduct(), newQty, null);
             inv.setLastUpdated(LocalDateTime.now());
 
             Inventory saved = inventoryRepository.save(inv);
@@ -485,6 +500,16 @@ public class InventoryService {
 
     private static String safeMessage(String message) {
         return message == null || message.isBlank() ? "No details available." : message;
+    }
+
+    private static void syncProductInventoryFields(Product product, Double stockQuantity, Double reorderLevel) {
+        if (product == null) return;
+        if (stockQuantity != null) {
+            product.setStockQuantity(stockQuantity);
+        }
+        if (reorderLevel != null) {
+            product.setReorderLevel(reorderLevel);
+        }
     }
 
     private static boolean isDiscontinued(Product product) {
