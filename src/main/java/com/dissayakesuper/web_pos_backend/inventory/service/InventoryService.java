@@ -73,6 +73,7 @@ public class InventoryService {
                 return qty > 0 && qty <= reorder;
             }).count();
         long outOfStock = all.stream().filter(i -> {
+                if (isDiscontinued(i.getProduct())) return false;
                 double qty = i.getStockQuantity() != null ? i.getStockQuantity() : 0.0;
                 return qty <= 0;
             }).count();

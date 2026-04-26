@@ -13,6 +13,8 @@ import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryReposito
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
 import com.dissayakesuper.web_pos_backend.product.entity.ProductStatus;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
+import com.dissayakesuper.web_pos_backend.reorder.entity.Status;
+import com.dissayakesuper.web_pos_backend.reorder.repository.ReorderRepository;
 import com.dissayakesuper.web_pos_backend.supplier.dto.SupplierRequest;
 import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
 import com.dissayakesuper.web_pos_backend.supplier.repository.SupplierRepository;
@@ -26,14 +28,17 @@ public class SupplierService {
     private final SupplierRepository repository;
     private final ProductRepository productRepository;
     private final InventoryRepository inventoryRepository;
+    private final ReorderRepository reorderRepository;
 
     public SupplierService(
             SupplierRepository repository,
             ProductRepository productRepository,
-            InventoryRepository inventoryRepository) {
+            InventoryRepository inventoryRepository,
+            ReorderRepository reorderRepository) {
         this.repository = repository;
         this.productRepository = productRepository;
         this.inventoryRepository = inventoryRepository;
+        this.reorderRepository = reorderRepository;
     }
 
     // ── READ ALL ──────────────────────────────────────────────────────────────
@@ -110,6 +115,13 @@ public class SupplierService {
         ProductStatus nextStatus = active ? ProductStatus.ACTIVE : ProductStatus.DISCONTINUED;
         singleSourceProducts.forEach(product -> product.setStatus(nextStatus));
         productRepository.saveAll(singleSourceProducts);
+
+        if (!active && !singleSourceProducts.isEmpty()) {
+            List<Long> productIds = singleSourceProducts.stream()
+                    .map(Product::getId)
+                    .toList();
+            reorderRepository.markOrdersForProducts(productIds, Status.PENDING, Status.CANCELLED);
+        }
 
         return repository.save(supplier);
     }

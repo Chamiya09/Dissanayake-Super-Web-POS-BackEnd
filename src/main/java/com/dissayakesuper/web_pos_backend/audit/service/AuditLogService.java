@@ -23,4 +23,12 @@ public class AuditLogService {
                 .details(details)
                 .build());
     }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logSystemBlock(String details) {
+        auditLogRepository.save(AuditLog.builder()
+                .action("System Block: Unauthorized Reorder Attempt")
+                .details(details)
+                .build());
+    }
 }

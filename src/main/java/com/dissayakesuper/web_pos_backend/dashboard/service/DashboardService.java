@@ -5,6 +5,7 @@ import com.dissayakesuper.web_pos_backend.dashboard.dto.OwnerDashboardStatsRespo
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import com.dissayakesuper.web_pos_backend.product.entity.ProductStatus;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.entity.SaleItem;
@@ -157,6 +158,7 @@ public class DashboardService {
 
         List<Inventory> allInventory = inventoryRepository.findAll();
         long outOfStockItems = allInventory.stream()
+                .filter(inv -> inv.getProduct() == null || inv.getProduct().getStatus() != ProductStatus.DISCONTINUED)
                 .filter(inv -> nvl(inv.getStockQuantity()) <= 0.0)
                 .count();
 

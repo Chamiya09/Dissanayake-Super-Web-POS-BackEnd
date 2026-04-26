@@ -8,8 +8,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.dissayakesuper.web_pos_backend.audit.service.AuditLogService;
+import com.dissayakesuper.web_pos_backend.config.BusinessException;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
+import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import com.dissayakesuper.web_pos_backend.product.entity.ProductStatus;
+import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 import com.dissayakesuper.web_pos_backend.reorder.dto.LowStockItemDTO;
 import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderItemRequestDTO;
 import com.dissayakesuper.web_pos_backend.reorder.dto.ReorderRequestDTO;
@@ -32,15 +37,21 @@ public class ReorderService {
     private final EmailService          emailService;
     private final InventoryRepository   inventoryRepository;
     private final SupplierRepository    supplierRepository;
+    private final ProductRepository     productRepository;
+    private final AuditLogService       auditLogService;
 
     public ReorderService(ReorderRepository reorderRepository,
                           EmailService emailService,
                           InventoryRepository inventoryRepository,
-                          SupplierRepository supplierRepository) {
+                          SupplierRepository supplierRepository,
+                          ProductRepository productRepository,
+                          AuditLogService auditLogService) {
         this.reorderRepository  = reorderRepository;
         this.emailService       = emailService;
         this.inventoryRepository = inventoryRepository;
         this.supplierRepository  = supplierRepository;
+        this.productRepository   = productRepository;
+        this.auditLogService     = auditLogService;
     }
 
     // ── CREATE ORDER ──────────────────────────────────────────────────────────
@@ -69,6 +80,8 @@ public class ReorderService {
                 .build();
 
         for (ReorderItemRequestDTO itemDTO : dto.items()) {
+            validateOrderableProduct(itemDTO, dto.orderRef());
+
             ReorderItem item = ReorderItem.builder()
                     .productName(itemDTO.productName())
                     .productId(itemDTO.productId())      // nullable soft-link
@@ -153,6 +166,8 @@ public class ReorderService {
 
             double total = 0.0;
             for (ReorderItemRequestDTO itemDTO : dto.items()) {
+                validateOrderableProduct(itemDTO, reorder.getOrderRef());
+
                 ReorderItem item = ReorderItem.builder()
                         .productName(itemDTO.productName())
                         .productId(itemDTO.productId())
@@ -300,6 +315,7 @@ public class ReorderService {
     public List<LowStockItemDTO> getLowStockItems() {
         return inventoryRepository.findAllLowStock()
                 .stream()
+                .filter(inv -> inv.getProduct() == null || inv.getProduct().getStatus() != ProductStatus.DISCONTINUED)
                 .map(this::toDTO)
                 .toList();
     }
@@ -321,7 +337,8 @@ public class ReorderService {
                 inv.getUnit(),
                 product.getSellingPrice() != null ? product.getSellingPrice().doubleValue() : 0.0,
                 supplier != null ? supplier.getCompanyName() : null,
-                supplier != null ? supplier.getEmail()       : null
+                supplier != null ? supplier.getEmail()       : null,
+                product.getStatus() != null ? product.getStatus().name() : null
         );
     }
 
@@ -336,6 +353,22 @@ public class ReorderService {
 
     private String newAcceptToken() {
         return UUID.randomUUID().toString();
+    }
+
+    private void validateOrderableProduct(ReorderItemRequestDTO itemDTO, String orderRef) {
+        Product product = null;
+        if (itemDTO.productId() != null) {
+            product = productRepository.findById(itemDTO.productId()).orElse(null);
+        }
+        if (product == null && itemDTO.productName() != null && !itemDTO.productName().isBlank()) {
+            product = productRepository.findFirstByProductNameIgnoreCase(itemDTO.productName()).orElse(null);
+        }
+        if (product != null && product.getStatus() == ProductStatus.DISCONTINUED) {
+            auditLogService.logSystemBlock(
+                    "Blocked reorder attempt for discontinued product '%s' (productId=%s, orderRef=%s)."
+                            .formatted(product.getProductName(), product.getId(), orderRef));
+            throw new BusinessException("Cannot place order for a discontinued product");
+        }
     }
 
     /**

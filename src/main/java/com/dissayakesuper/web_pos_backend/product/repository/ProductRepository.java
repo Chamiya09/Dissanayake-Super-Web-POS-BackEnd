@@ -29,6 +29,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Optional<Product> findByIdAndIsActiveTrue(Long id);
 
+    Optional<Product> findFirstByProductNameIgnoreCase(String productName);
+
     List<Product> findByIsActiveTrue();
 
     /** Find all products assigned to a specific supplier. */
