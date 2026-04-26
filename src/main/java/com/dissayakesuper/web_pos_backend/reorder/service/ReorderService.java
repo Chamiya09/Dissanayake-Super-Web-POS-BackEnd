@@ -24,6 +24,7 @@ import com.dissayakesuper.web_pos_backend.reorder.entity.Reorder;
 import com.dissayakesuper.web_pos_backend.reorder.entity.ReorderItem;
 import com.dissayakesuper.web_pos_backend.reorder.entity.Status;
 import com.dissayakesuper.web_pos_backend.reorder.repository.ReorderRepository;
+import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
 import com.dissayakesuper.web_pos_backend.supplier.repository.SupplierRepository;
 
 import java.time.LocalDateTime;
@@ -68,6 +69,7 @@ public class ReorderService {
                     HttpStatus.CONFLICT,
                     "An order with ref '" + dto.orderRef() + "' already exists.");
         }
+        validateSupplierActive(dto.supplierEmail());
 
         // Build item entities and accumulate total
         double total = 0.0;
@@ -155,7 +157,10 @@ public class ReorderService {
 
         // ── Update supplierEmail ──────────────────────────────────────────────
         if (dto.supplierEmail() != null && !dto.supplierEmail().isBlank()) {
+            validateSupplierActive(dto.supplierEmail());
             reorder.setSupplierEmail(dto.supplierEmail());
+        } else {
+            validateSupplierActive(reorder.getSupplierEmail());
         }
 
         // ── Replace items and recalculate total ───────────────────────────────
@@ -338,6 +343,7 @@ public class ReorderService {
                 product.getSellingPrice() != null ? product.getSellingPrice().doubleValue() : 0.0,
                 supplier != null ? supplier.getCompanyName() : null,
                 supplier != null ? supplier.getEmail()       : null,
+                supplier != null ? supplier.isActive()       : null,
                 product.getStatus() != null ? product.getStatus().name() : null
         );
     }
@@ -369,6 +375,21 @@ public class ReorderService {
                             .formatted(product.getProductName(), product.getId(), orderRef));
             throw new BusinessException("Cannot place order for a discontinued product");
         }
+        Supplier supplier = product != null ? product.getSupplier() : null;
+        if (supplier != null && !supplier.isActive()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Action blocked: Associated supplier is inactive.");
+        }
+    }
+
+    private void validateSupplierActive(String supplierEmail) {
+        if (supplierEmail == null || supplierEmail.isBlank()) {
+            return;
+        }
+        supplierRepository.findByEmail(supplierEmail)
+                .filter(supplier -> !supplier.isActive())
+                .ifPresent(supplier -> {
+                    throw new BusinessException(HttpStatus.BAD_REQUEST, "Action blocked: Associated supplier is inactive.");
+                });
     }
 
     /**

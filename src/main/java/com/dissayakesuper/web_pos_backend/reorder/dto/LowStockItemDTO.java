@@ -14,5 +14,6 @@ public record LowStockItemDTO(
         String supplierName,
         /** Supplier contact email — null if no supplier is assigned to this product. */
         String supplierEmail,
+        Boolean supplierActive,
         String productStatus
 ) {}
