@@ -111,7 +111,7 @@ public class InventoryController {
     public ResponseEntity<InventoryStatusResponse> addStock(
             @PathVariable Long productId,
             @Valid @RequestBody AddStockRequest request) {
-        Inventory updated = service.updateStock(productId, request.quantity());
+        Inventory updated = service.updateStock(productId, request.quantity(), request.reorderLevel());
         return ResponseEntity.ok(InventoryStatusResponse.from(updated));
     }
 

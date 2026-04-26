@@ -15,6 +15,10 @@ public class Supplier {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Size(max = 100)
+    @Column(name = "supplier_code", unique = true, length = 100)
+    private String supplierCode;
+
     @NotBlank
     @Size(max = 255)
     @Column(name = "company_name", nullable = false, length = 255)
@@ -44,6 +48,10 @@ public class Supplier {
     @Column(name = "is_auto_reorder_enabled", nullable = false)
     private boolean isAutoReorderEnabled = false;
 
+    @JsonProperty("isActive")
+    @Column(name = "is_active", nullable = false)
+    private boolean isActive = true;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -70,6 +78,9 @@ public class Supplier {
 
     public Long getId() { return id; }
 
+    public String getSupplierCode() { return supplierCode; }
+    public void setSupplierCode(String supplierCode) { this.supplierCode = supplierCode; }
+
     public String getCompanyName() { return companyName; }
     public void setCompanyName(String companyName) { this.companyName = companyName; }
 
@@ -87,6 +98,9 @@ public class Supplier {
 
     public boolean isAutoReorderEnabled() { return isAutoReorderEnabled; }
     public void setAutoReorderEnabled(boolean autoReorderEnabled) { this.isAutoReorderEnabled = autoReorderEnabled; }
+
+    public boolean isActive() { return isActive; }
+    public void setActive(boolean active) { isActive = active; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

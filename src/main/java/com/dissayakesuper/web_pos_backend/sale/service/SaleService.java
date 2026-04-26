@@ -15,10 +15,15 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.dissayakesuper.web_pos_backend.audit.service.AuditLogService;
 import com.dissayakesuper.web_pos_backend.inventory.entity.Inventory;
 import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepository;
@@ -32,6 +37,8 @@ import com.dissayakesuper.web_pos_backend.sale.dto.SaleUpdateRequest;
 import com.dissayakesuper.web_pos_backend.sale.entity.Sale;
 import com.dissayakesuper.web_pos_backend.sale.entity.SaleItem;
 import com.dissayakesuper.web_pos_backend.sale.repository.SaleRepository;
+import com.dissayakesuper.web_pos_backend.user.entity.User;
+import com.dissayakesuper.web_pos_backend.user.repository.UserRepository;
 
 @Service
 @Transactional
@@ -40,18 +47,19 @@ public class SaleService {
     private static final DateTimeFormatter EXPORT_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter EXPORT_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final List<String> ML_EXPORT_HEADERS = List.of(
+            "TransactionID",
             "Date",
             "Time",
-            "TransactionID",
             "ProductID",
             "ProductName",
             "Category",
             "PricingUnit",
-            "Quantity",
             "UnitPrice",
             "BuyingPrice",
             "SellingPrice",
-            "Total_LKR"
+            "Quantity",
+            "Total_LKR",
+            "Payment Method"
     );
 
     private final SaleRepository        saleRepository;
@@ -59,17 +67,26 @@ public class SaleService {
     private final InventoryLogRepository inventoryLogRepository;
     private final ProductRepository productRepository;
     private final TransactionIdService transactionIdService;
+    private final UserRepository userRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
+    private final AuditLogService auditLogService;
 
     public SaleService(SaleRepository saleRepository,
                        InventoryRepository inventoryRepository,
                        InventoryLogRepository inventoryLogRepository,
                        ProductRepository productRepository,
-                       TransactionIdService transactionIdService) {
+                       TransactionIdService transactionIdService,
+                       UserRepository userRepository,
+                       BCryptPasswordEncoder passwordEncoder,
+                       AuditLogService auditLogService) {
         this.saleRepository       = saleRepository;
         this.inventoryRepository  = inventoryRepository;
         this.inventoryLogRepository = inventoryLogRepository;
         this.productRepository = productRepository;
         this.transactionIdService = transactionIdService;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.auditLogService = auditLogService;
     }
 
     // ── CREATE ────────────────────────────────────────────────────────────────
@@ -77,6 +94,11 @@ public class SaleService {
     public Sale createSale(Sale sale) {
         // Transaction IDs are generated server-side to guarantee sequential continuity.
         sale.setReceiptNo(transactionIdService.nextTransactionId());
+        currentAuthenticatedUser().ifPresent(user -> {
+            sale.setCashierId(user.getId());
+            sale.setCashierUsername(user.getUsername());
+            sale.setCashierName(user.getFullName());
+        });
 
         // ── Deduct stock for every item in this sale ──────────────────────────
         for (SaleItem item : sale.getItems()) {
@@ -103,7 +125,7 @@ public class SaleService {
             inventory.setStockQuantity(newQty);
             inventoryRepository.save(inventory);
 
-            // ── Audit log: record the stock deduction caused by this sale ─────
+            // Record the stock deduction caused by this sale.
             inventoryLogRepository.save(InventoryLog.builder()
                     .productId(inventory.getProduct().getId())
                     .productName(inventory.getProduct().getProductName())
@@ -120,7 +142,20 @@ public class SaleService {
 
     @Transactional(readOnly = true)
     public List<Sale> getAllSales() {
-        return saleRepository.findAll();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (hasAnyRole(auth, "ROLE_OWNER", "ROLE_MANAGER")) {
+            return saleRepository.findAllByOrderBySaleDateDescIdDesc();
+        }
+
+        if (hasAnyRole(auth, "ROLE_STAFF")) {
+            User currentUser = currentAuthenticatedUser()
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.FORBIDDEN,
+                            "Authenticated user not found."));
+            return saleRepository.findByCashierIdOrderBySaleDateDescIdDesc(currentUser.getId());
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized to view sales.");
     }
 
     @Transactional(readOnly = true)
@@ -170,18 +205,19 @@ public class SaleService {
                 int totalLkr = toIntegerAmount(item.getLineTotal());
 
                 List<String> row = List.of(
+                        transactionId,
                         date,
                         time,
-                        transactionId,
                         productId,
                         productName,
                         category,
                         pricingUnit,
-                        quantity,
                         String.valueOf(unitPrice),
                         String.valueOf(buyingPrice),
                         String.valueOf(sellingPrice),
-                        String.valueOf(totalLkr)
+                        quantity,
+                        String.valueOf(totalLkr),
+                        safe(sale.getPaymentMethod())
                 );
 
                 out.writeBytes((row.stream().map(this::escapeCsv).collect(Collectors.joining(",")) + "\n")
@@ -196,10 +232,12 @@ public class SaleService {
 
     @Transactional(readOnly = true)
     public Sale getSaleById(Long id) {
-        return saleRepository.findById(id)
+        Sale sale = saleRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Sale not found with id: " + id));
+        enforceSaleVisibility(sale);
+        return sale;
     }
 
     // ── UPDATE SALE (reverse + re-adjust) ──────────────────────────────────────
@@ -346,7 +384,7 @@ public class SaleService {
      * @throws ResponseStatusException 404 if sale not found, 409 if already Voided/Returned
      */
     @Transactional
-    public Sale returnSale(Long saleId) {
+    public Sale returnSale(Long saleId, SaleReturnRequest request) {
         Sale sale = getSaleById(saleId);
         List<SaleReturnItemRequest> fullReturnItems = sale.getItems().stream()
                 .map(item -> {
@@ -359,12 +397,18 @@ public class SaleService {
                 .filter(item -> item != null)
                 .toList();
 
-        return returnSelectedItems(saleId, new SaleReturnRequest(fullReturnItems));
+        return returnSelectedItems(saleId, new SaleReturnRequest(
+                fullReturnItems,
+                request.approverId(),
+                request.approverEmail(),
+                request.approverPassword()
+        ));
     }
 
     @Transactional
     public Sale returnSelectedItems(Long saleId, SaleReturnRequest request) {
         Sale sale = getSaleById(saleId);
+        User approver = validateReturnApprover(request);
 
         String currentStatus = sale.getStatus();
         if ("Voided".equalsIgnoreCase(currentStatus) || "Returned".equalsIgnoreCase(currentStatus)) {
@@ -378,7 +422,12 @@ public class SaleService {
             itemsById.put(item.getId(), item);
         }
 
-        for (SaleReturnItemRequest returnItem : request.items()) {
+        List<SaleReturnItemRequest> requestedItems = request.items() == null ? List.of() : request.items();
+        if (requestedItems.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one item to return.");
+        }
+
+        for (SaleReturnItemRequest returnItem : requestedItems) {
             SaleItem saleItem = itemsById.get(returnItem.saleItemId());
             if (saleItem == null) {
                 throw new ResponseStatusException(
@@ -446,7 +495,91 @@ public class SaleService {
             sale.setStatus("Partially Returned");
         }
 
-        return saleRepository.save(sale);
+        Sale saved = saleRepository.save(sale);
+        auditLogService.logAction(
+                approver.getId(),
+                "SALE_RETURN",
+                "Sale " + saleId + " return approved by " + approver.getEmail()
+        );
+        return saved;
+    }
+
+    private User validateReturnApprover(SaleReturnRequest request) {
+        String approverId = safe(request.approverId());
+        String legacyApproverEmail = safe(request.approverEmail());
+        String approverIdentifier = approverId.isBlank() ? legacyApproverEmail : approverId;
+        String approverPassword = request.approverPassword() == null ? "" : request.approverPassword();
+
+        if (approverIdentifier.isBlank() || approverPassword.isBlank()) {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (hasAnyRole(auth, "ROLE_OWNER", "ROLE_MANAGER")) {
+                return currentAuthenticatedUser()
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.FORBIDDEN,
+                                "Authenticated approver not found."));
+            }
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Approver Credentials");
+        }
+
+        User approver = userRepository.findByMemberIdIgnoreCase(approverIdentifier)
+                .or(() -> userRepository.findByUsernameIgnoreCase(approverIdentifier))
+                .or(() -> userRepository.findByEmailIgnoreCase(approverIdentifier))
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Invalid Approver Credentials"));
+
+        if (!approver.isActive() || !passwordEncoder.matches(approverPassword, approver.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Approver Credentials");
+        }
+
+        String role = approver.getRole() == null ? "" : approver.getRole().trim();
+        boolean authorized = "Owner".equalsIgnoreCase(role)
+                || "Manager".equalsIgnoreCase(role)
+                || ("Staff".equalsIgnoreCase(role) && approver.isSenior());
+
+        if (!authorized) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized Approver");
+        }
+
+        return approver;
+    }
+
+    private Optional<User> currentAuthenticatedUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null || !auth.isAuthenticated()) {
+            return Optional.empty();
+        }
+        return userRepository.findByUsername(auth.getName());
+    }
+
+    private boolean hasAnyRole(Authentication auth, String... roles) {
+        if (auth == null || auth.getAuthorities() == null) {
+            return false;
+        }
+
+        Set<String> requiredRoles = Set.of(roles);
+        return auth.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(requiredRoles::contains);
+    }
+
+    private void enforceSaleVisibility(Sale sale) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (hasAnyRole(auth, "ROLE_OWNER", "ROLE_MANAGER")) {
+            return;
+        }
+
+        if (hasAnyRole(auth, "ROLE_STAFF")) {
+            User currentUser = currentAuthenticatedUser()
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.FORBIDDEN,
+                            "Authenticated user not found."));
+            if (sale.getCashierId() != null && sale.getCashierId().equals(currentUser.getId())) {
+                return;
+            }
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized to view this sale.");
     }
 
     private java.math.BigDecimal getReturnedQty(SaleItem item) {

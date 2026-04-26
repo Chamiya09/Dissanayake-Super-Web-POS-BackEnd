@@ -3,10 +3,8 @@ package com.dissayakesuper.web_pos_backend.product.service;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,6 +18,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductBulkImportResponse;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductImportError;
 import com.dissayakesuper.web_pos_backend.product.dto.ProductImportSuccess;
@@ -32,10 +31,16 @@ import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 @Transactional
 public class ProductService {
 
-    private final ProductRepository repository;
+    private static final double STOCK_EPSILON = 1e-6;
 
-    public ProductService(ProductRepository repository) {
+    private final ProductRepository repository;
+    private final InventoryRepository inventoryRepository;
+
+    public ProductService(
+            ProductRepository repository,
+            InventoryRepository inventoryRepository) {
         this.repository = repository;
+        this.inventoryRepository = inventoryRepository;
     }
 
     // ── READ ALL ──────────────────────────────────────────────────────────────
@@ -132,14 +137,7 @@ public class ProductService {
     // ── CREATE ────────────────────────────────────────────────────────────────
 
     public Product createProduct(ProductRequest request) {
-        String sku = normalizeOptional(request.sku());
         String barcode = normalizeOptional(request.barcode());
-
-        if (sku != null && repository.existsBySkuAndIsActiveTrue(sku)) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "A product with SKU '" + sku + "' already exists.");
-        }
 
         if (barcode != null && repository.existsByBarcodeAndIsActiveTrue(barcode)) {
             throw new ResponseStatusException(
@@ -148,18 +146,27 @@ public class ProductService {
         }
 
         Product product = new Product(
-                request.productName(),
-                sku,
-                barcode,
-                request.category(),
-                request.buyingPrice(),
-                request.sellingPrice(),
-                request.unit(),
-                request.stockQuantity(),
-                request.reorderLevel()
+            request.productName(),
+            null,
+            barcode,
+            request.category(),
+            request.buyingPrice(),
+            request.sellingPrice(),
+            request.unit(),
+            request.stockQuantity(),
+            request.reorderLevel()
         );
 
-        return repository.save(product);
+        try {
+            Product saved = repository.saveAndFlush(product);
+            saved.setSku(formatProductSku(saved.getId()));
+            return repository.saveAndFlush(saved);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Product could not be created because SKU or barcode already exists."
+            );
+        }
     }
 
     // ── BULK IMPORT ──────────────────────────────────────────────────────────
@@ -177,7 +184,6 @@ public class ProductService {
 
         List<ProductImportSuccess> importedProducts = new ArrayList<>();
         List<ProductImportError> errors = new ArrayList<>();
-        Set<String> seenSkus = new HashSet<>();
 
         for (int i = 0; i < requests.size(); i++) {
             int rowNumber = i + 2; // row 1 is CSV header
@@ -191,7 +197,6 @@ public class ProductService {
                 }
 
                 String productName = normalizeRequired(request.productName());
-                String sku = normalizeRequired(request.sku());
                 String category = normalizeRequired(request.category());
                 BigDecimal buyingPrice = request.buyingPrice();
                 BigDecimal sellingPrice = request.sellingPrice();
@@ -199,11 +204,11 @@ public class ProductService {
                 Double stockQuantity = request.stockQuantity();
                 Double reorderLevel = request.reorderLevel();
 
-                skuForError = sku;
+                skuForError = normalizeOptional(request.sku());
 
                 List<String> validationErrors = validateBulkValues(
                         productName,
-                        sku,
+                        skuForError,
                         category,
                         buyingPrice,
                         sellingPrice,
@@ -212,25 +217,14 @@ public class ProductService {
                         reorderLevel
                 );
                 if (!validationErrors.isEmpty()) {
-                    errors.add(new ProductImportError(rowNumber, sku, String.join(" ", validationErrors)));
-                    continue;
-                }
-
-                String skuKey = sku.toLowerCase(Locale.ROOT);
-                if (!seenSkus.add(skuKey)) {
-                    errors.add(new ProductImportError(rowNumber, sku, "Duplicate SKU in CSV file."));
-                    continue;
-                }
-
-                if (repository.existsBySkuAndIsActiveTrue(sku)) {
-                    errors.add(new ProductImportError(rowNumber, sku, "SKU already exists in the database."));
+                    errors.add(new ProductImportError(rowNumber, skuForError, String.join(" ", validationErrors)));
                     continue;
                 }
 
                 Product product = new Product(
                         productName,
-                        sku,
-                    null,
+                        null,
+                        null,
                         category,
                         buyingPrice,
                         sellingPrice,
@@ -240,6 +234,8 @@ public class ProductService {
                 );
 
                 Product saved = repository.saveAndFlush(product);
+                saved.setSku(formatProductSku(saved.getId()));
+                saved = repository.saveAndFlush(saved);
                 importedProducts.add(toImportSuccess(saved));
             } catch (DataIntegrityViolationException ex) {
                 errors.add(new ProductImportError(
@@ -269,18 +265,7 @@ public class ProductService {
 
     public Product updateProduct(Long id, ProductRequest request) {
         Product existing = getProductById(id);
-        String sku = normalizeOptional(request.sku());
         String barcode = normalizeOptional(request.barcode());
-
-        if (sku != null) {
-            repository.findBySkuAndIsActiveTrue(sku)
-                    .filter(other -> !other.getId().equals(id))
-                    .ifPresent(other -> {
-                        throw new ResponseStatusException(
-                                HttpStatus.CONFLICT,
-                                "SKU '" + sku + "' is already used by another product.");
-                    });
-        }
 
         // Guard: reject if the new barcode is already taken by a *different* active product.
         if (barcode != null) {
@@ -294,7 +279,7 @@ public class ProductService {
         }
 
         existing.setProductName(request.productName());
-        existing.setSku(sku);
+        existing.setSku(formatProductSku(id));
         existing.setBarcode(barcode);
         existing.setCategory(request.category());
         existing.setBuyingPrice(request.buyingPrice());
@@ -311,11 +296,46 @@ public class ProductService {
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     public void deleteProduct(Long id) {
-        // Ensures 404 for unknown/inactive id before attempting update query.
-        getProductById(id);
+        // Ensures 404 for unknown/inactive id before attempting hard delete.
+        Product product = getProductById(id);
 
-        // Soft-delete + barcode release in one write operation.
-        repository.softDeleteAndReleaseBarcode(id);
+        boolean hasRemainingStock = hasStock(product);
+        boolean isAssignedToSupplier = isSupplierAssigned(product);
+
+        if (hasRemainingStock || isAssignedToSupplier) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    buildDeleteBlockedMessage(hasRemainingStock, isAssignedToSupplier));
+        }
+
+        if (inventoryRepository.existsByProductId(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Cannot delete product: It is currently present in the Inventory.");
+        }
+
+        repository.deleteById(id);
+    }
+
+    private boolean hasStock(Product product) {
+        Double stockQuantity = product.getStockQuantity();
+        return stockQuantity != null && stockQuantity > STOCK_EPSILON;
+    }
+
+    private boolean isSupplierAssigned(Product product) {
+        return product.getSupplierId() != null || product.getSupplier() != null;
+    }
+
+    private String buildDeleteBlockedMessage(boolean hasRemainingStock, boolean isAssignedToSupplier) {
+        if (hasRemainingStock && isAssignedToSupplier) {
+            return "Cannot delete product. There is still remaining stock in the inventory. Cannot delete product. This item is currently assigned to a supplier.";
+        }
+
+        if (hasRemainingStock) {
+            return "Cannot delete product. There is still remaining stock in the inventory.";
+        }
+
+        return "Cannot delete product. This item is currently assigned to a supplier.";
     }
 
     // ── GET UNASSIGNED ────────────────────────────────────────────────────────
@@ -368,9 +388,7 @@ public class ProductService {
             errors.add("Product name must be 255 characters or fewer.");
         }
 
-        if (sku == null || sku.isEmpty()) {
-            errors.add("SKU / ProductID is required.");
-        } else if (sku.length() > 100) {
+        if (sku != null && sku.length() > 100) {
             errors.add("SKU must be 100 characters or fewer.");
         }
 
@@ -434,4 +452,12 @@ public class ProductService {
     private static String safeMessage(String message) {
         return message == null || message.isBlank() ? "No details available." : message;
     }
+
+    private static String formatProductSku(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Product id is required to generate product ID.");
+        }
+        return String.format(Locale.ROOT, "PI%04d", id);
+    }
+
 }

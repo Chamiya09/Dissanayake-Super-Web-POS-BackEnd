@@ -133,8 +133,10 @@ public class SaleController {
      * @return 200 OK with the updated Sale, 404 if not found, 409 if already Voided/Returned.
      */
     @PostMapping("/{id}/return")
-    public ResponseEntity<Sale> returnSale(@PathVariable Long id) {
-        Sale returned = saleService.returnSale(id);
+    public ResponseEntity<Sale> returnSale(
+            @PathVariable Long id,
+            @Valid @RequestBody SaleReturnRequest request) {
+        Sale returned = saleService.returnSale(id, request);
         return ResponseEntity.ok(returned);
     }
 

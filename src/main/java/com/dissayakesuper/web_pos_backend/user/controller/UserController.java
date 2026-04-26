@@ -2,12 +2,14 @@ package com.dissayakesuper.web_pos_backend.user.controller;
 
 import com.dissayakesuper.web_pos_backend.user.dto.ChangePasswordRequest;
 import com.dissayakesuper.web_pos_backend.user.dto.CreateUserRequest;
+import com.dissayakesuper.web_pos_backend.user.dto.ProfileUpdateRequest;
 import com.dissayakesuper.web_pos_backend.user.dto.UpdateUserRequest;
 import com.dissayakesuper.web_pos_backend.user.dto.UserResponse;
 import com.dissayakesuper.web_pos_backend.user.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,6 +32,19 @@ public class UserController {
         return ResponseEntity.ok(service.findAll());
     }
 
+    // ── GET /api/users/profile ───────────────────────────────────────────────
+    @GetMapping("/profile")
+    public ResponseEntity<UserResponse> getProfile(Authentication authentication) {
+        return ResponseEntity.ok(service.getProfile(authentication.getName()));
+    }
+
+    // ── PUT /api/users/profile ───────────────────────────────────────────────
+    @PutMapping("/profile")
+    public ResponseEntity<UserResponse> updateProfile(Authentication authentication,
+                                                      @Valid @RequestBody ProfileUpdateRequest request) {
+        return ResponseEntity.ok(service.updateProfile(authentication.getName(), request));
+    }
+
     // ── POST /api/users ───────────────────────────────────────────────────────
     @PostMapping
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
@@ -37,14 +52,14 @@ public class UserController {
     }
 
     // ── PUT /api/users/{id} ───────────────────────────────────────────────────
-    @PutMapping("/{id}")
+    @PutMapping("/{id:[0-9]+}")
     public ResponseEntity<UserResponse> updateUser(@PathVariable Long id,
                                                    @Valid @RequestBody UpdateUserRequest request) {
         return ResponseEntity.ok(service.update(id, request));
     }
 
     // ── DELETE /api/users/{id} ────────────────────────────────────────────────
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:[0-9]+}")
     public ResponseEntity<Map<String, String>> deleteUser(@PathVariable Long id) {
         service.delete(id);
         return ResponseEntity.ok(Map.of("message", "User deleted successfully."));

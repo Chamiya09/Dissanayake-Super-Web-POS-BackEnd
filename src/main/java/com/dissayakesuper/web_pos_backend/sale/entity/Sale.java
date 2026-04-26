@@ -55,6 +55,15 @@ public class Sale {
     @Column(name = "status", nullable = false, length = 20)
     private String status;   // "Completed" | "Voided"
 
+    @Column(name = "cashier_id")
+    private Long cashierId;
+
+    @Column(name = "cashier_username", length = 50)
+    private String cashierUsername;
+
+    @Column(name = "cashier_name", length = 150)
+    private String cashierName;
+
     @NotEmpty(message = "Sale must include at least one item.")
     @Valid
     @JsonManagedReference
@@ -114,6 +123,15 @@ public class Sale {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public Long getCashierId() { return cashierId; }
+    public void setCashierId(Long cashierId) { this.cashierId = cashierId; }
+
+    public String getCashierUsername() { return cashierUsername; }
+    public void setCashierUsername(String cashierUsername) { this.cashierUsername = cashierUsername; }
+
+    public String getCashierName() { return cashierName; }
+    public void setCashierName(String cashierName) { this.cashierName = cashierName; }
 
     public List<SaleItem> getItems() { return items; }
     public void setItems(List<SaleItem> items) { this.items = items; }

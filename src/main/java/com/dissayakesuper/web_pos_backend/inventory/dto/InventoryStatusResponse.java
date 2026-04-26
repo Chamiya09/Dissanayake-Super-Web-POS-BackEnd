@@ -25,6 +25,10 @@ public record InventoryStatusResponse(
         Double reorderLevel,
         String unit,
         String stockStatus,        // "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK"
+        String productStatus,
+        Long supplierId,
+        String supplierEmail,
+        Boolean supplierActive,
         LocalDateTime lastUpdated
 ) {
     /** Convenience factory — builds from an Inventory entity. */
@@ -50,6 +54,10 @@ public record InventoryStatusResponse(
                 reorder,
                 inv.getUnit() != null ? inv.getUnit() : "N/A",
                 status,
+                product != null && product.getStatus() != null ? product.getStatus().name() : null,
+                product != null ? product.getSupplierId() : null,
+                product != null && product.getSupplier() != null ? product.getSupplier().getEmail() : null,
+                product != null && product.getSupplier() != null ? product.getSupplier().isActive() : null,
                 inv.getLastUpdated()
         );
     }

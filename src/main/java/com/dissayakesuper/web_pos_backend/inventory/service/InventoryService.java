@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.dissayakesuper.web_pos_backend.config.BusinessException;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryBulkImportResponse;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryAnalyticsDTO;
 import com.dissayakesuper.web_pos_backend.inventory.dto.InventoryImportError;
@@ -25,6 +26,7 @@ import com.dissayakesuper.web_pos_backend.inventory.entity.InventoryLog;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryLogRepository;
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import com.dissayakesuper.web_pos_backend.product.entity.ProductStatus;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
 
 @Service
@@ -66,11 +68,13 @@ public class InventoryService {
 
         long tracked    = all.size();
         long lowStock   = all.stream().filter(i -> {
+                if (isDiscontinued(i.getProduct())) return false;
                 double qty = i.getStockQuantity() != null ? i.getStockQuantity() : 0.0;
                 double reorder = i.getReorderLevel() != null ? i.getReorderLevel() : 0.0;
                 return qty > 0 && qty <= reorder;
             }).count();
         long outOfStock = all.stream().filter(i -> {
+                if (isDiscontinued(i.getProduct())) return false;
                 double qty = i.getStockQuantity() != null ? i.getStockQuantity() : 0.0;
                 return qty <= 0;
             }).count();
@@ -134,23 +138,33 @@ public class InventoryService {
      * @param quantityToAdd amount to add (must be > 0)
      * @return the saved Inventory record
      */
-    public Inventory updateStock(Long productId, Double quantityToAdd) {
+    public Inventory updateStock(Long productId, Double quantityToAdd, Double reorderLevel) {
         if (quantityToAdd == null || quantityToAdd <= 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "quantityToAdd must be greater than zero.");
         }
+        if (reorderLevel != null && reorderLevel < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "reorderLevel must be 0 or greater.");
+        }
 
-        Inventory inventory = inventoryRepository.findByProductId(productId)
+        Inventory inventory = inventoryRepository.findByProductIdWithProduct(productId)
                 .orElseGet(() -> createInventoryForProduct(productId));
+        validateSupplierActiveForStockAddition(inventory.getProduct());
 
         double newQty = inventory.getStockQuantity() + quantityToAdd;
         inventory.setStockQuantity(newQty);
+        syncProductInventoryFields(inventory.getProduct(), newQty, reorderLevel);
+        if (reorderLevel != null) {
+            inventory.setReorderLevel(reorderLevel);
+        }
         inventory.setLastUpdated(LocalDateTime.now());
 
         Inventory saved = inventoryRepository.save(inventory);
 
-        // ── Audit log: record the manual stock addition ──────────────────────
+        // Record the manual stock addition.
         inventoryLogRepository.save(InventoryLog.builder()
                 .productId(saved.getProduct().getId())
                 .productName(saved.getProduct().getProductName())
@@ -214,6 +228,12 @@ public class InventoryService {
                     errors.add(new InventoryImportError(rowNumber, sku, "SKU was not found in the database."));
                     continue;
                 }
+                try {
+                    validateSupplierActiveForStockAddition(product);
+                } catch (BusinessException ex) {
+                    errors.add(new InventoryImportError(rowNumber, sku, ex.getMessage()));
+                    continue;
+                }
 
                 Inventory inventory = inventoryRepository.findByProductId(product.getId())
                         .orElseGet(() -> Inventory.builder()
@@ -229,6 +249,7 @@ public class InventoryService {
 
                 inventory.setStockQuantity(stockQuantity);
                 inventory.setReorderLevel(reorderLevel);
+                syncProductInventoryFields(product, stockQuantity, reorderLevel);
                 if (unit != null) {
                     inventory.setUnit(unit);
                 }
@@ -295,6 +316,7 @@ public class InventoryService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Inventory record not found with id: " + inventoryId));
+        validateSupplierActiveForInventoryUpdate(inventory.getProduct());
 
         double newQty = inventory.getStockQuantity() + adjustmentAmount;
         if (newQty < 0) {
@@ -306,6 +328,7 @@ public class InventoryService {
         }
 
         inventory.setStockQuantity(newQty);
+        syncProductInventoryFields(inventory.getProduct(), newQty, null);
         inventory.setLastUpdated(LocalDateTime.now());
         Inventory saved = inventoryRepository.save(inventory);
 
@@ -350,14 +373,19 @@ public class InventoryService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Inventory record not found with id: " + inventoryId));
+        validateSupplierActiveForInventoryUpdate(inv.getProduct());
 
-        if (request.reorderLevel() != null) inv.setReorderLevel(request.reorderLevel());
+        if (request.reorderLevel() != null) {
+            inv.setReorderLevel(request.reorderLevel());
+            syncProductInventoryFields(inv.getProduct(), null, request.reorderLevel());
+        }
         if (request.unit()         != null) inv.setUnit(request.unit());
 
         // ── Stock increment: new_stock = existing_stock + quantityToAdd ──────
         if (request.quantityToAdd() != null && request.quantityToAdd() > 0) {
             double newQty = inv.getStockQuantity() + request.quantityToAdd();
             inv.setStockQuantity(newQty);
+            syncProductInventoryFields(inv.getProduct(), newQty, null);
             inv.setLastUpdated(LocalDateTime.now());
 
             Inventory saved = inventoryRepository.save(inv);
@@ -376,7 +404,7 @@ public class InventoryService {
         return inventoryRepository.save(inv);
     }
 
-    // ── AUDIT LOG ─────────────────────────────────────────────────────────────
+    // Stock history
 
     /**
      * Returns the full stock-change history for a product, newest first.
@@ -401,10 +429,11 @@ public class InventoryService {
      * Inherits {@code unit} from the Product; stockQuantity starts at 0.0.
      */
     private Inventory createInventoryForProduct(Long productId) {
-        Product product = productRepository.findById(productId)
+        Product product = productRepository.findByIdWithSupplier(productId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Product not found with id: " + productId));
+        validateSupplierActiveForStockAddition(product);
 
         return Inventory.builder()
                 .product(product)
@@ -471,5 +500,29 @@ public class InventoryService {
 
     private static String safeMessage(String message) {
         return message == null || message.isBlank() ? "No details available." : message;
+    }
+
+    private static void syncProductInventoryFields(Product product, Double stockQuantity, Double reorderLevel) {
+        if (product == null) return;
+        if (stockQuantity != null) {
+            product.setStockQuantity(stockQuantity);
+        }
+        if (reorderLevel != null) {
+            product.setReorderLevel(reorderLevel);
+        }
+    }
+
+    private static boolean isDiscontinued(Product product) {
+        return product != null && product.getStatus() == ProductStatus.DISCONTINUED;
+    }
+
+    private void validateSupplierActiveForStockAddition(Product product) {
+        validateSupplierActiveForInventoryUpdate(product);
+    }
+
+    private void validateSupplierActiveForInventoryUpdate(Product product) {
+        if (product != null && product.getSupplier() != null && !product.getSupplier().isActive()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Action Blocked: Associated supplier is currently inactive");
+        }
     }
 }

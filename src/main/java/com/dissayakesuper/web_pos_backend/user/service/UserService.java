@@ -2,6 +2,7 @@ package com.dissayakesuper.web_pos_backend.user.service;
 
 import com.dissayakesuper.web_pos_backend.user.dto.ChangePasswordRequest;
 import com.dissayakesuper.web_pos_backend.user.dto.CreateUserRequest;
+import com.dissayakesuper.web_pos_backend.user.dto.ProfileUpdateRequest;
 import com.dissayakesuper.web_pos_backend.user.dto.UpdateUserRequest;
 import com.dissayakesuper.web_pos_backend.user.dto.UserResponse;
 import com.dissayakesuper.web_pos_backend.user.entity.User;
@@ -84,7 +85,8 @@ public class UserService {
 
     private UserResponse toResponse(User u) {
         UserResponse r = new UserResponse(u.getId(), u.getUsername(), u.getMemberId(), u.getFullName(),
-                                          u.getEmail(), u.getRole(), u.isActive());
+                                          u.getEmail(), u.getPhoneNumber(), u.getAddress(),
+                                          u.getRole(), u.isActive(), u.isSenior());
         r.setCreatedAt(u.getCreatedAt());
         return r;
     }
@@ -96,10 +98,38 @@ public class UserService {
                    .collect(Collectors.toList());
     }
 
+    // ── Get current profile ──────────────────────────────────────────────────
+    public UserResponse getProfile(String username) {
+        User user = repo.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found."));
+        return toResponse(user);
+    }
+
+    // ── Update current profile (fullName/phoneNumber/address) ───────────────
+    public UserResponse updateProfile(String username, ProfileUpdateRequest req) {
+        User user = repo.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found."));
+
+        String fullName = normalize(req.getFullName());
+        if (fullName.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Full name is required.");
+        }
+
+        user.setFullName(fullName);
+        user.setPhoneNumber(normalize(req.getPhoneNumber()));
+        user.setAddress(normalize(req.getAddress()));
+
+        return toResponse(repo.save(user));
+    }
+
     // ── Create user ───────────────────────────────────────────────────────────
     public UserResponse create(CreateUserRequest req) {
         String fullName = normalize(req.getFullName());
         String email = normalize(req.getEmail());
+        String phoneNumber = normalize(req.getPhoneNumber());
+        String address = normalize(req.getAddress());
         String role = normalizeRole(req.getRole());
         String password = normalize(req.getPassword());
         String username = normalize(req.getUsername());
@@ -140,7 +170,10 @@ public class UserService {
         user.setMemberId(memberId.isBlank() ? null : memberId);
         user.setFullName(fullName);
         user.setEmail(email);
+        user.setPhoneNumber(phoneNumber);
+        user.setAddress(address);
         user.setRole(role);
+        user.setSenior("Staff".equals(role) && req.isSenior());
         user.setPasswordHash(encoder.encode(password));
         user.setActive(true);
 
@@ -187,7 +220,10 @@ public class UserService {
 
         if (req.getFullName() != null) user.setFullName(normalize(req.getFullName()));
         if (req.getEmail()    != null) user.setEmail(normalize(req.getEmail()));
+        if (req.getPhoneNumber() != null) user.setPhoneNumber(normalize(req.getPhoneNumber()));
+        if (req.getAddress() != null) user.setAddress(normalize(req.getAddress()));
         user.setRole(newRole);
+        user.setSenior("Staff".equals(newRole) && req.isSenior());
 
         return toResponse(repo.save(user));
     }

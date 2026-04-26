@@ -29,6 +29,11 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Optional<Product> findByIdAndIsActiveTrue(Long id);
 
+    @Query("SELECT p FROM Product p LEFT JOIN FETCH p.supplier WHERE p.id = :id")
+    Optional<Product> findByIdWithSupplier(@Param("id") Long id);
+
+    Optional<Product> findFirstByProductNameIgnoreCase(String productName);
+
     List<Product> findByIsActiveTrue();
 
     /** Find all products assigned to a specific supplier. */
@@ -70,6 +75,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         Page<Product> searchActiveProducts(@Param("searchTerm") String searchTerm, Pageable pageable);
 
     @Modifying
-    @Query("UPDATE Product p SET p.isActive = false, p.barcode = null, p.supplier = null WHERE p.id = :id AND p.isActive = true")
+    @Query("UPDATE Product p SET p.isActive = false, p.status = com.dissayakesuper.web_pos_backend.product.entity.ProductStatus.DISCONTINUED, p.barcode = null, p.supplier = null WHERE p.id = :id AND p.isActive = true")
     int softDeleteAndReleaseBarcode(@Param("id") Long id);
 }

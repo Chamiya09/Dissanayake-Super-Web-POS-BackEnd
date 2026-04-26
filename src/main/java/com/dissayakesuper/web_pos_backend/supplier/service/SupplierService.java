@@ -11,7 +11,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.dissayakesuper.web_pos_backend.inventory.repository.InventoryRepository;
 import com.dissayakesuper.web_pos_backend.product.entity.Product;
+import com.dissayakesuper.web_pos_backend.product.entity.ProductStatus;
 import com.dissayakesuper.web_pos_backend.product.repository.ProductRepository;
+import com.dissayakesuper.web_pos_backend.reorder.entity.Status;
+import com.dissayakesuper.web_pos_backend.reorder.repository.ReorderRepository;
 import com.dissayakesuper.web_pos_backend.supplier.dto.SupplierRequest;
 import com.dissayakesuper.web_pos_backend.supplier.entity.Supplier;
 import com.dissayakesuper.web_pos_backend.supplier.repository.SupplierRepository;
@@ -25,14 +28,17 @@ public class SupplierService {
     private final SupplierRepository repository;
     private final ProductRepository productRepository;
     private final InventoryRepository inventoryRepository;
+    private final ReorderRepository reorderRepository;
 
     public SupplierService(
             SupplierRepository repository,
             ProductRepository productRepository,
-            InventoryRepository inventoryRepository) {
+            InventoryRepository inventoryRepository,
+            ReorderRepository reorderRepository) {
         this.repository = repository;
         this.productRepository = productRepository;
         this.inventoryRepository = inventoryRepository;
+        this.reorderRepository = reorderRepository;
     }
 
     // ── READ ALL ──────────────────────────────────────────────────────────────
@@ -88,6 +94,7 @@ public class SupplierService {
                 });
 
         existing.setCompanyName(request.companyName());
+        existing.setSupplierCode(formatSupplierCode(id));
         existing.setContactPerson(request.contactPerson());
         existing.setEmail(request.email());
         existing.setPhone(request.phone());
@@ -95,6 +102,31 @@ public class SupplierService {
         existing.setAutoReorderEnabled(request.isAutoReorderEnabled());
 
         return repository.save(existing);
+    }
+
+    public Supplier updateSupplierActiveStatus(Long id, boolean active) {
+        Supplier supplier = getSupplierById(id);
+        if (supplier.isActive() == active) {
+            return supplier;
+        }
+
+        supplier.setActive(active);
+
+        List<Product> singleSourceProducts = productRepository.findBySupplierIdAndIsActiveTrue(id);
+        ProductStatus nextStatus = active ? ProductStatus.ACTIVE : ProductStatus.DISCONTINUED;
+        singleSourceProducts.forEach(product -> product.setStatus(nextStatus));
+        productRepository.saveAll(singleSourceProducts);
+
+        if (!active && !singleSourceProducts.isEmpty()) {
+            List<Long> productIds = singleSourceProducts.stream()
+                    .map(Product::getId)
+                    .toList();
+            reorderRepository.markOrdersForProducts(productIds, Status.PENDING, Status.CANCELLED);
+        }
+
+        Supplier saved = repository.saveAndFlush(supplier);
+        saved.setSupplierCode(formatSupplierCode(saved.getId()));
+        return repository.saveAndFlush(saved);
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────────
@@ -122,6 +154,7 @@ public class SupplierService {
                 product.setSupplier(null);
                 product.setSku(null);
                 product.setActive(false);
+                product.setStatus(ProductStatus.DISCONTINUED);
             });
             productRepository.saveAll(assignedProducts);
         }
@@ -139,8 +172,16 @@ public class SupplierService {
                     HttpStatus.BAD_REQUEST,
                     "One or more product IDs were not found.");
         }
-        products.forEach(p -> p.setSupplier(supplier));
+        ProductStatus assignedStatus = supplier.isActive() ? ProductStatus.ACTIVE : ProductStatus.DISCONTINUED;
+        products.forEach(p -> {
+            p.setSupplier(supplier);
+            p.setStatus(assignedStatus);
+        });
         productRepository.saveAll(products);
+
+        if (!supplier.isActive()) {
+            reorderRepository.markOrdersForProducts(productIds, Status.PENDING, Status.CANCELLED);
+        }
     }
 
     private double currentInventoryQty(Product product) {
@@ -158,5 +199,12 @@ public class SupplierService {
             return String.format(Locale.ENGLISH, "%.0f", qty);
         }
         return String.format(Locale.ENGLISH, "%.3f", qty);
+    }
+
+    private static String formatSupplierCode(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Supplier id is required to generate supplier code.");
+        }
+        return String.format(Locale.ROOT, "SI%04d", id);
     }
 }
