@@ -70,6 +70,9 @@ public class EmailService {
     @Value("${app.reorder.accept-url-base:http://localhost:8080/api/v1/reorder/accept}")
     private String supplierAcceptUrlBase;
 
+    @Value("${app.frontend.base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
+
     public EmailService(JavaMailSender mailSender) {
         this.mailSender = mailSender;
     }
@@ -550,7 +553,7 @@ public class EmailService {
                         <tr>
                           <td style="padding:0 28px 28px;">
                             <p style="margin:0;font-size:12px;color:#64748b;line-height:1.6;">
-                              Log in to the <a href="http://localhost:5173/reorder" style="color:#6366f1;font-weight:600;">Reorder Management dashboard</a> to review, confirm, or cancel this order.
+                              Log in to the <a href="%s/reorder" style="color:#6366f1;font-weight:600;">Reorder Management dashboard</a> to review, confirm, or cancel this order.
                             </p>
                           </td>
                         </tr>
@@ -573,7 +576,8 @@ public class EmailService {
                 CARD_STYLE, escapeHtml(placedAt),
                 CARD_STYLE, safeSupplier, escapeHtml(supplierEmail),
                 CARD_STYLE, escapeHtml(managerName),
-                totalAmount
+                totalAmount,
+                escapeHtml(trimTrailingSlash(frontendBaseUrl))
         );
     }
 
@@ -599,5 +603,10 @@ public class EmailService {
                 .replace("<",  "&lt;")
                 .replace(">",  "&gt;")
                 .replace("\"", "&quot;");
+    }
+
+    private static String trimTrailingSlash(String value) {
+        if (value == null) return "";
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 }
