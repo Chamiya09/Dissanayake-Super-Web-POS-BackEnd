@@ -17,6 +17,7 @@ import java.util.Date;
  * Token payload:
  *   sub  → username
  *   role → user's role string (Owner / Manager / Staff)
+ *   isSenior → true if the user is a senior staff member
  *   iat  → issued-at timestamp
  *   exp  → expiry (default 24 h)
  */
@@ -42,15 +43,17 @@ public class JwtUtils {
      *
      * @param username the user's unique username (stored as JWT subject)
      * @param role     the user's role string (Owner / Manager / Staff)
+     * @param isSenior whether the user is a senior staff member
      * @return compact JWT string — safe to return to the client
      */
-    public String generateToken(String username, String role) {
+    public String generateToken(String username, String role, boolean isSenior) {
         Date now    = new Date();
         Date expiry = new Date(now.getTime() + jwtExpirationMs);
 
         return Jwts.builder()
                 .setSubject(username)
                 .claim("role", role)
+            .claim("isSenior", isSenior)
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(signingKey())
@@ -67,6 +70,12 @@ public class JwtUtils {
     /** Extracts the role claim from a valid, non-expired token. */
     public String getRoleFromToken(String token) {
         return parseClaims(token).get("role", String.class);
+    }
+
+    /** Extracts the isSenior claim from a valid, non-expired token. */
+    public boolean getIsSeniorFromToken(String token) {
+        Boolean isSenior = parseClaims(token).get("isSenior", Boolean.class);
+        return isSenior != null && isSenior;
     }
 
     /**

@@ -64,9 +64,9 @@ public class AuthController {
                     "Invalid login ID or password.");
         }
 
-        // 4. Issue JWT; return token + login ID + display name + role
-        String token = jwtUtils.generateToken(user.getUsername(), user.getRole());
+        // 4. Issue JWT; return token + login ID + display name + role + isSenior
+        String token = jwtUtils.generateToken(user.getUsername(), user.getRole(), user.isSenior());
         String responseLoginId = user.getMemberId() != null ? user.getMemberId() : user.getUsername();
-        return new AuthResponse(token, user.getUsername(), responseLoginId, user.getFullName(), user.getRole());
+        return new AuthResponse(token, user.getUsername(), responseLoginId, user.getFullName(), user.getRole(), user.isSenior());
     }
 }
