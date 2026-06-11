@@ -1,5 +1,7 @@
 package com.dissayakesuper.web_pos_backend.auth.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
  * Response payload returned by POST /api/auth/login on success.
  *
@@ -8,5 +10,7 @@ package com.dissayakesuper.web_pos_backend.auth.dto;
  * @param loginId  The member login ID (for manager/staff) or username fallback.
  * @param name     The user's full display name (shown in the UI).
  * @param role     The user's role: Owner | Manager | Staff.
+ * @param isSenior True if the user is a senior staff member.
  */
-public record AuthResponse(String token, String username, String loginId, String name, String role) {}
+public record AuthResponse(String token, String username, String loginId, String name, String role,
+						   @JsonProperty("isSenior") boolean isSenior) {}

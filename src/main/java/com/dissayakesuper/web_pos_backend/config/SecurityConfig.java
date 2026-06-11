@@ -2,6 +2,7 @@ package com.dissayakesuper.web_pos_backend.config;
 
 import com.dissayakesuper.web_pos_backend.security.JwtAuthFilter;
 import com.dissayakesuper.web_pos_backend.security.UserDetailsServiceImpl;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -19,6 +20,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Production-ready Spring Security configuration.
@@ -32,6 +34,9 @@ import java.util.List;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    @Value("#{'${app.cors.allowed-origin-patterns:http://localhost:5173,http://localhost:3000,http://192.168.*:5173,http://192.168.*:3000,http://10.*.*.*:5173,http://10.*.*.*:3000,http://172.16.*.*:5173,http://172.16.*.*:3000}'.split(',')}")
+    private List<String> allowedOriginPatterns;
 
     private final UserDetailsServiceImpl userDetailsService;
     private final JwtAuthFilter          jwtAuthFilter;
@@ -104,10 +109,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(
-                "http://localhost:5173",   // Vite dev server
-                "http://localhost:3000"    // CRA / alternative port
-        ));
+        config.setAllowedOriginPatterns(allowedOriginPatterns.stream()
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .collect(Collectors.toList()));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
