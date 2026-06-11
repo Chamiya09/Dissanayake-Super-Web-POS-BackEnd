@@ -17,6 +17,7 @@ public record InventoryStatusResponse(
         Long   productId,
         String productName,
         String sku,
+        String barcode,
         String category,
         Double sellingPrice,
 
@@ -47,6 +48,7 @@ public record InventoryStatusResponse(
                 product != null ? product.getId() : null,
                 product != null ? product.getProductName() : "Unknown Product",
                 product != null ? product.getSku() : "N/A",
+                product != null ? product.getBarcode() : null,
                 product != null ? product.getCategory() : "Uncategorized",
                 product != null && product.getSellingPrice() != null
                         ? product.getSellingPrice().doubleValue() : 0.0,

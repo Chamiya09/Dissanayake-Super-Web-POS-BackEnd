@@ -110,10 +110,10 @@ public class ProductService {
 
         String needle = searchTerm.toLowerCase(Locale.ROOT);
         String name = product.getProductName() == null ? "" : product.getProductName().toLowerCase(Locale.ROOT);
-        String sku = product.getSku() == null ? "" : product.getSku().toLowerCase(Locale.ROOT);
-        String category = product.getCategory() == null ? "" : product.getCategory().toLowerCase(Locale.ROOT);
+        String productId = product.getSku() == null ? "" : product.getSku().toLowerCase(Locale.ROOT);
+        String barcode = product.getBarcode() == null ? "" : product.getBarcode().toLowerCase(Locale.ROOT);
 
-        return name.contains(needle) || sku.contains(needle) || category.contains(needle);
+        return name.contains(needle) || productId.contains(needle) || barcode.contains(needle);
     }
 
     // ── AVAILABLE FOR INVENTORY ────────────────────────────────────────────────

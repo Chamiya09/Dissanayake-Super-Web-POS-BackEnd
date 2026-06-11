@@ -512,12 +512,18 @@ public class SaleService {
 
         if (approverIdentifier.isBlank() || approverPassword.isBlank()) {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (hasAnyRole(auth, "ROLE_OWNER", "ROLE_MANAGER")) {
-                return currentAuthenticatedUser()
-                        .orElseThrow(() -> new ResponseStatusException(
-                                HttpStatus.FORBIDDEN,
-                                "Authenticated approver not found."));
+            User currentUser = currentAuthenticatedUser()
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.FORBIDDEN,
+                            "Authenticated approver not found."));
+
+            boolean bypassAllowed = hasAnyRole(auth, "ROLE_OWNER", "ROLE_MANAGER")
+                    || (hasAnyRole(auth, "ROLE_STAFF") && currentUser.isSenior());
+
+            if (bypassAllowed) {
+                return currentUser;
             }
+
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Approver Credentials");
         }
 

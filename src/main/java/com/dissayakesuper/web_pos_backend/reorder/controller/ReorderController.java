@@ -39,7 +39,6 @@ import jakarta.validation.Valid;
  */
 @RestController
 @RequestMapping("/api/v1/reorder")
-@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
 public class ReorderController {
 
     private final ReorderService reorderService;

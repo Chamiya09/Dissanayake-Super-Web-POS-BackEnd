@@ -12,6 +12,7 @@ import com.dissayakesuper.web_pos_backend.sale.entity.SaleItem;
 import com.dissayakesuper.web_pos_backend.sale.repository.SaleRepository;
 import com.dissayakesuper.web_pos_backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -129,6 +130,7 @@ public class DashboardService {
         return new OwnerDashboardStatsResponse(kpis, trend, categoryPoints, topSellingProducts);
     }
 
+    @Transactional(readOnly = true)
     public ManagerDashboardStatsResponse getManagerStats() {
         List<Sale> allSales = saleRepository.findAll();
         LocalDate today = LocalDate.now();
@@ -158,15 +160,17 @@ public class DashboardService {
                 .count();
 
         List<ManagerDashboardStatsResponse.LowStockItem> lowStockList = inventoryRepository.findAllLowStock().stream()
-                .sorted(Comparator.comparingDouble(inv -> nvl(inv.getStockQuantity())))
-                .limit(20)
-                .map(inv -> new ManagerDashboardStatsResponse.LowStockItem(
-                        inv.getProduct().getId(),
-                        inv.getProduct().getProductName(),
-                        round3(nvl(inv.getStockQuantity())),
-                        round3(nvl(inv.getReorderLevel()))
-                ))
-                .toList();
+            .filter(inv -> inv.getProduct() != null)
+            .filter(inv -> inv.getProduct().getStatus() != ProductStatus.DISCONTINUED)
+            .sorted(Comparator.comparingDouble(inv -> nvl(inv.getStockQuantity())))
+            .limit(20)
+            .map(inv -> new ManagerDashboardStatsResponse.LowStockItem(
+                inv.getProduct().getId(),
+                inv.getProduct().getProductName(),
+                round3(nvl(inv.getStockQuantity())),
+                round3(nvl(inv.getReorderLevel()))
+            ))
+            .toList();
 
         ManagerDashboardStatsResponse.Kpis kpis = new ManagerDashboardStatsResponse.Kpis(
                 round2(todaysSales),
